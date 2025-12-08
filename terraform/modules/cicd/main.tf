@@ -262,6 +262,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "cache" {
     id     = "expire-cache"
     status = "Enabled"
 
+    filter {}
+
     expiration {
       days = 30
     }
@@ -418,6 +420,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "artifacts" {
   rule {
     id     = "expire-old-artifacts"
     status = "Enabled"
+
+    filter {}
 
     expiration {
       days = 30

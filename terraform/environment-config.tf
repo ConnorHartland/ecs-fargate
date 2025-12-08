@@ -90,13 +90,36 @@ locals {
 
   # =============================================================================
   # Environment-Specific Tags
+  # Requirements: 10.6, 11.4
   # =============================================================================
   environment_tags = {
     Environment     = var.environment
     IsProduction    = tostring(local.is_production)
     SecurityLevel   = local.is_production ? "high" : "standard"
     ComplianceScope = local.is_production ? "full" : "limited"
+    DataClass       = local.is_production ? "confidential" : "internal"
+    BackupPolicy    = local.is_production ? "daily" : "weekly"
   }
+
+  # =============================================================================
+  # Common Tags - Applied to All Resources
+  # Combines mandatory compliance tags with environment-specific tags
+  # Requirements: 10.6, 11.4
+  # =============================================================================
+  common_tags = merge(
+    {
+      # Mandatory compliance tags (NIST, SOC-2)
+      Environment = var.environment
+      Owner       = var.mandatory_tags.Owner
+      CostCenter  = var.mandatory_tags.CostCenter
+      Compliance  = var.mandatory_tags.Compliance
+
+      # Infrastructure management tags
+      ManagedBy = "Terraform"
+      Project   = var.project_name
+    },
+    local.environment_tags
+  )
 }
 
 # =============================================================================
@@ -104,6 +127,7 @@ locals {
 # =============================================================================
 
 # This local map can be passed to modules for consistent environment configuration
+# and includes the common_tags for resource tagging
 locals {
   environment_config = {
     # Environment identification
@@ -146,5 +170,54 @@ locals {
 
     # Tags
     environment_tags = local.environment_tags
+    common_tags      = local.common_tags
+  }
+}
+
+# =============================================================================
+# Environment-Specific IAM Policy Configuration
+# Requirements: 10.5
+# =============================================================================
+
+locals {
+  # IAM policy restrictions based on environment
+  # Production: Stricter access controls
+  # Non-production: More permissive for development flexibility
+  iam_config = {
+    # Require MFA for production resources
+    require_mfa = local.is_production
+
+    # Allow destructive actions without MFA in non-production
+    allow_destructive_without_mfa = local.is_non_production
+
+    # Session duration limits (in seconds)
+    # Production: 1 hour max session
+    # Non-production: 12 hours max session
+    max_session_duration = local.is_production ? 3600 : 43200
+
+    # IP restrictions for production (can be customized via variable)
+    enable_ip_restrictions = local.is_production
+
+    # Permissions boundary enforcement
+    enforce_permissions_boundary = local.is_production
+  }
+
+  # Resource protection settings
+  resource_protection = {
+    # Enable termination protection for EC2 instances (if any)
+    enable_termination_protection = local.is_production
+
+    # Enable deletion protection for databases, load balancers, etc.
+    enable_deletion_protection = local.enable_deletion_protection
+
+    # Prevent accidental secret deletion
+    secret_recovery_window_days = local.secrets_recovery_window
+
+    # KMS key protection
+    kms_key_deletion_window_days = local.kms_key_deletion_window
+
+    # S3 bucket protection
+    enable_s3_versioning = true
+    enable_s3_mfa_delete = local.is_production
   }
 }

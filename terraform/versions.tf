@@ -18,4 +18,15 @@ terraform {
       version = "~> 3.2"
     }
   }
+
+  # S3 backend configuration with encryption and DynamoDB state locking
+  # Backend configuration is partially configured here and completed via backend config files
+  backend "s3" {
+    # These values are provided via backend config files per environment
+    # bucket         = "terraform-state-bucket"
+    # key            = "ecs-fargate/terraform.tfstate"
+    # region         = "us-east-1"
+    # dynamodb_table = "terraform-state-lock"
+    encrypt = true
+  }
 }

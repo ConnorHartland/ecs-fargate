@@ -164,3 +164,35 @@ output "kafka_client_security_group_name" {
   description = "Name of the security group for Kafka client access"
   value       = var.create_service_security_groups ? aws_security_group.kafka_client[0].name : null
 }
+
+
+# =============================================================================
+# VPC Peering Outputs
+# =============================================================================
+
+output "vpc_peering_connection_ids" {
+  description = "List of VPC peering connection IDs"
+  value       = var.enable_vpc_peering ? aws_vpc_peering_connection.peer[*].id : []
+}
+
+output "vpc_peering_connection_statuses" {
+  description = "Map of VPC peering connection names to their status"
+  value = var.enable_vpc_peering ? {
+    for idx, conn in var.vpc_peering_connections :
+    conn.name => aws_vpc_peering_connection.peer[idx].accept_status
+  } : {}
+}
+
+# =============================================================================
+# VPC Isolation Outputs
+# =============================================================================
+
+output "is_production_vpc" {
+  description = "Whether this VPC is configured as a production VPC"
+  value       = var.is_production
+}
+
+output "vpc_isolation_validated" {
+  description = "Whether VPC isolation validation passed"
+  value       = var.is_production ? startswith(var.vpc_cidr, var.production_vpc_cidr_prefix) : !startswith(var.vpc_cidr, var.production_vpc_cidr_prefix)
+}

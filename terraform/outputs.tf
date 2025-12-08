@@ -20,38 +20,7 @@ output "environment" {
   value       = var.environment
 }
 
-# =============================================================================
-# Networking Outputs (populated when networking module is implemented)
-# =============================================================================
 
-# output "vpc_id" {
-#   description = "VPC ID"
-#   value       = module.networking.vpc_id
-# }
-
-# output "private_subnet_ids" {
-#   description = "List of private subnet IDs for ECS tasks"
-#   value       = module.networking.private_subnet_ids
-# }
-
-# output "public_subnet_ids" {
-#   description = "List of public subnet IDs for ALB"
-#   value       = module.networking.public_subnet_ids
-# }
-
-# =============================================================================
-# ECS Cluster Outputs (populated when ECS cluster module is implemented)
-# =============================================================================
-
-# output "ecs_cluster_arn" {
-#   description = "ECS cluster ARN"
-#   value       = module.ecs_cluster.cluster_arn
-# }
-
-# output "ecs_cluster_name" {
-#   description = "ECS cluster name"
-#   value       = module.ecs_cluster.cluster_name
-# }
 
 # =============================================================================
 # Security Outputs
@@ -95,20 +64,6 @@ output "secrets_with_rotation" {
   description = "List of secret names that have rotation enabled"
   value       = module.secrets.secrets_with_rotation
 }
-
-# =============================================================================
-# ALB Outputs (populated when ALB module is implemented)
-# =============================================================================
-
-# output "alb_arn" {
-#   description = "Application Load Balancer ARN"
-#   value       = module.alb.alb_arn
-# }
-
-# output "alb_dns_name" {
-#   description = "Application Load Balancer DNS name"
-#   value       = module.alb.alb_dns_name
-# }
 
 # =============================================================================
 # Service Outputs (populated when services are deployed)
@@ -172,4 +127,250 @@ output "production_iam_policies" {
     production_protection_policy = module.security.production_protection_policy_arn
     permissions_boundary_policy  = module.security.permissions_boundary_policy_arn
   } : null
+}
+
+# =============================================================================
+# IAM Configuration Outputs
+# Requirements: 10.5
+# =============================================================================
+
+output "iam_config" {
+  description = "Environment-specific IAM configuration settings"
+  value       = local.iam_config
+}
+
+output "resource_protection" {
+  description = "Environment-specific resource protection settings"
+  value       = local.resource_protection
+}
+
+# =============================================================================
+# Resource Tagging Outputs
+# Requirements: 10.6, 11.4
+# =============================================================================
+
+output "common_tags" {
+  description = "Common tags applied to all resources (mandatory compliance + environment-specific)"
+  value       = local.common_tags
+}
+
+output "environment_tags" {
+  description = "Environment-specific tags"
+  value       = local.environment_tags
+}
+
+output "mandatory_tags" {
+  description = "Mandatory compliance tags (Environment, Owner, CostCenter, Compliance)"
+  value = {
+    Environment = var.environment
+    Owner       = var.mandatory_tags.Owner
+    CostCenter  = var.mandatory_tags.CostCenter
+    Compliance  = var.mandatory_tags.Compliance
+  }
+}
+
+# =============================================================================
+# ECS Cluster Outputs
+# =============================================================================
+
+output "ecs_cluster_arn" {
+  description = "ECS cluster ARN"
+  value       = module.ecs_cluster.cluster_arn
+}
+
+output "ecs_cluster_name" {
+  description = "ECS cluster name"
+  value       = module.ecs_cluster.cluster_name
+}
+
+# =============================================================================
+# Networking Outputs
+# =============================================================================
+
+output "vpc_id" {
+  description = "VPC ID"
+  value       = module.networking.vpc_id
+}
+
+output "private_subnet_ids" {
+  description = "List of private subnet IDs for ECS tasks"
+  value       = module.networking.private_subnet_ids
+}
+
+output "public_subnet_ids" {
+  description = "List of public subnet IDs for ALB"
+  value       = module.networking.public_subnet_ids
+}
+
+# =============================================================================
+# ALB Outputs
+# =============================================================================
+
+output "alb_arn" {
+  description = "Application Load Balancer ARN"
+  value       = module.alb.alb_arn
+}
+
+output "alb_dns_name" {
+  description = "Application Load Balancer DNS name"
+  value       = module.alb.alb_dns_name
+}
+
+output "alb_security_group_id" {
+  description = "Security group ID for the ALB"
+  value       = module.alb.security_group_id
+}
+
+# =============================================================================
+# Monitoring Outputs
+# =============================================================================
+
+output "monitoring_sns_topics" {
+  description = "SNS topic ARNs for monitoring notifications"
+  value = {
+    critical_alarms        = module.monitoring.critical_alarms_topic_arn
+    warning_alarms         = module.monitoring.warning_alarms_topic_arn
+    pipeline_notifications = module.monitoring.pipeline_notifications_topic_arn
+  }
+}
+
+output "cluster_log_group_name" {
+  description = "CloudWatch log group name for the ECS cluster"
+  value       = module.monitoring.cluster_log_group_name
+}
+
+# =============================================================================
+# VPC Isolation Outputs
+# Requirements: 10.4
+# =============================================================================
+
+output "vpc_cidr_block" {
+  description = "VPC CIDR block"
+  value       = module.networking.vpc_cidr_block
+}
+
+output "vpc_isolation_validated" {
+  description = "Whether VPC isolation validation passed (production uses distinct CIDR from non-production)"
+  value       = module.networking.vpc_isolation_validated
+}
+
+output "is_production_vpc" {
+  description = "Whether this VPC is configured as a production VPC"
+  value       = module.networking.is_production_vpc
+}
+
+output "vpc_peering_connection_ids" {
+  description = "List of VPC peering connection IDs (if VPC peering is enabled)"
+  value       = module.networking.vpc_peering_connection_ids
+}
+
+output "vpc_peering_connection_statuses" {
+  description = "Map of VPC peering connection names to their status"
+  value       = module.networking.vpc_peering_connection_statuses
+}
+
+# =============================================================================
+# CloudTrail Outputs
+# Requirements: 11.1, 11.2
+# =============================================================================
+
+output "cloudtrail_arn" {
+  description = "ARN of the CloudTrail"
+  value       = module.cloudtrail.cloudtrail_arn
+}
+
+output "cloudtrail_name" {
+  description = "Name of the CloudTrail"
+  value       = module.cloudtrail.cloudtrail_name
+}
+
+output "cloudtrail_s3_bucket_arn" {
+  description = "ARN of the S3 bucket for CloudTrail logs"
+  value       = module.cloudtrail.s3_bucket_arn
+}
+
+output "cloudtrail_s3_bucket_name" {
+  description = "Name of the S3 bucket for CloudTrail logs"
+  value       = module.cloudtrail.s3_bucket_name
+}
+
+output "cloudtrail_cloudwatch_log_group_arn" {
+  description = "ARN of the CloudWatch Log Group for CloudTrail"
+  value       = module.cloudtrail.cloudwatch_log_group_arn
+}
+
+output "cloudtrail_compliance_status" {
+  description = "Compliance status summary for CloudTrail configuration"
+  value       = module.cloudtrail.compliance_status
+}
+
+output "cloudtrail_alerts_topic_arn" {
+  description = "ARN of the SNS topic for CloudTrail security alerts"
+  value       = module.cloudtrail.cloudtrail_alerts_topic_arn
+}
+
+
+# =============================================================================
+# AWS Config Outputs
+# Requirements: 11.5
+# =============================================================================
+
+output "config_recorder_id" {
+  description = "ID of the AWS Config recorder"
+  value       = module.config.config_recorder_id
+}
+
+output "config_recorder_name" {
+  description = "Name of the AWS Config recorder"
+  value       = module.config.config_recorder_name
+}
+
+output "config_delivery_channel_id" {
+  description = "ID of the AWS Config delivery channel"
+  value       = module.config.delivery_channel_id
+}
+
+output "config_s3_bucket_arn" {
+  description = "ARN of the S3 bucket for Config delivery"
+  value       = module.config.s3_bucket_arn
+}
+
+output "config_s3_bucket_name" {
+  description = "Name of the S3 bucket for Config delivery"
+  value       = module.config.s3_bucket_name
+}
+
+output "config_notifications_topic_arn" {
+  description = "ARN of the SNS topic for Config notifications"
+  value       = module.config.config_notifications_topic_arn
+}
+
+output "config_compliance_alerts_topic_arn" {
+  description = "ARN of the SNS topic for compliance alerts"
+  value       = module.config.compliance_alerts_topic_arn
+}
+
+output "config_aggregator_arn" {
+  description = "ARN of the Config aggregator (null if not enabled)"
+  value       = module.config.aggregator_arn
+}
+
+output "config_enabled" {
+  description = "Whether AWS Config is enabled"
+  value       = module.config.config_enabled
+}
+
+output "config_compliance_status" {
+  description = "Compliance status summary for AWS Config configuration"
+  value       = module.config.compliance_status
+}
+
+output "config_rules" {
+  description = "Map of all Config rule ARNs by category"
+  value = {
+    ecs        = module.config.ecs_config_rules
+    encryption = module.config.encryption_config_rules
+    iam        = module.config.iam_config_rules
+    vpc        = module.config.vpc_config_rules
+  }
 }

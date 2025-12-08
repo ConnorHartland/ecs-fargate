@@ -177,6 +177,41 @@ output "permissions_boundary_policy_arn" {
   value       = length(aws_iam_policy.permissions_boundary) > 0 ? aws_iam_policy.permissions_boundary[0].arn : null
 }
 
+# =============================================================================
+# Human User Access Policy Outputs
+# Requirements: 11.3
+# =============================================================================
+
+output "enforce_mfa_policy_arn" {
+  description = "ARN of the MFA enforcement policy - only created in production"
+  value       = length(aws_iam_policy.enforce_mfa) > 0 ? aws_iam_policy.enforce_mfa[0].arn : null
+}
+
+output "production_readonly_policy_arn" {
+  description = "ARN of the production read-only policy (requires MFA) - only created in production"
+  value       = length(aws_iam_policy.production_readonly) > 0 ? aws_iam_policy.production_readonly[0].arn : null
+}
+
+output "production_operator_policy_arn" {
+  description = "ARN of the production operator policy (requires MFA) - only created in production"
+  value       = length(aws_iam_policy.production_operator) > 0 ? aws_iam_policy.production_operator[0].arn : null
+}
+
+output "production_admin_policy_arn" {
+  description = "ARN of the production admin policy (requires MFA) - only created in production"
+  value       = length(aws_iam_policy.production_admin) > 0 ? aws_iam_policy.production_admin[0].arn : null
+}
+
+output "human_access_policies" {
+  description = "Map of all human user access policy ARNs - only populated in production"
+  value = length(aws_iam_policy.enforce_mfa) > 0 ? {
+    enforce_mfa         = aws_iam_policy.enforce_mfa[0].arn
+    production_readonly = aws_iam_policy.production_readonly[0].arn
+    production_operator = aws_iam_policy.production_operator[0].arn
+    production_admin    = aws_iam_policy.production_admin[0].arn
+  } : {}
+}
+
 output "is_production" {
   description = "Whether this is a production environment"
   value       = local.is_production

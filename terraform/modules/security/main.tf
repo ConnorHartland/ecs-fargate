@@ -885,6 +885,438 @@ resource "aws_iam_policy" "production_access" {
   })
 }
 
+# =============================================================================
+# Human User Access Policy Templates
+# Policies for IAM users/groups accessing production resources
+# Requirements: 11.3
+# =============================================================================
+
+# Policy: Enforce MFA for all production console and API access
+resource "aws_iam_policy" "enforce_mfa" {
+  count = local.is_production && var.require_mfa_for_production ? 1 : 0
+
+  name        = "${local.name_prefix}-enforce-mfa"
+  description = "Enforces MFA for all actions except MFA self-management"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowViewAccountInfo"
+        Effect = "Allow"
+        Action = [
+          "iam:GetAccountPasswordPolicy",
+          "iam:ListVirtualMFADevices"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowManageOwnVirtualMFADevice"
+        Effect = "Allow"
+        Action = [
+          "iam:CreateVirtualMFADevice",
+          "iam:DeleteVirtualMFADevice"
+        ]
+        Resource = "arn:aws:iam::${var.aws_account_id}:mfa/$${aws:username}"
+      },
+      {
+        Sid    = "AllowManageOwnUserMFA"
+        Effect = "Allow"
+        Action = [
+          "iam:DeactivateMFADevice",
+          "iam:EnableMFADevice",
+          "iam:GetUser",
+          "iam:ListMFADevices",
+          "iam:ResyncMFADevice"
+        ]
+        Resource = "arn:aws:iam::${var.aws_account_id}:user/$${aws:username}"
+      },
+      {
+        Sid    = "DenyAllExceptListedIfNoMFA"
+        Effect = "Deny"
+        NotAction = [
+          "iam:CreateVirtualMFADevice",
+          "iam:EnableMFADevice",
+          "iam:GetUser",
+          "iam:GetAccountPasswordPolicy",
+          "iam:ListMFADevices",
+          "iam:ListVirtualMFADevices",
+          "iam:ResyncMFADevice",
+          "sts:GetSessionToken"
+        ]
+        Resource = "*"
+        Condition = {
+          BoolIfExists = {
+            "aws:MultiFactorAuthPresent" = "false"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name       = "${local.name_prefix}-enforce-mfa"
+    Purpose    = "MFAEnforcement"
+    Compliance = "NIST-IA-2,SOC2-CC6.1"
+  })
+}
+
+# Policy: Read-only access to production ECS resources (requires MFA)
+resource "aws_iam_policy" "production_readonly" {
+  count = local.is_production && var.require_mfa_for_production ? 1 : 0
+
+  name        = "${local.name_prefix}-production-readonly"
+  description = "Read-only access to production ECS resources - requires MFA"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ECSReadOnly"
+        Effect = "Allow"
+        Action = [
+          "ecs:Describe*",
+          "ecs:List*"
+        ]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "ECRReadOnly"
+        Effect = "Allow"
+        Action = [
+          "ecr:Describe*",
+          "ecr:List*",
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer"
+        ]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "CloudWatchLogsReadOnly"
+        Effect = "Allow"
+        Action = [
+          "logs:Describe*",
+          "logs:Get*",
+          "logs:FilterLogEvents",
+          "logs:StartQuery",
+          "logs:StopQuery",
+          "logs:GetQueryResults"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/ecs/${local.name_prefix}-*:*"
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "CloudWatchMetricsReadOnly"
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:Describe*",
+          "cloudwatch:Get*",
+          "cloudwatch:List*"
+        ]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name       = "${local.name_prefix}-production-readonly"
+    Purpose    = "ProductionReadOnlyAccess"
+    Compliance = "NIST-AC-3,SOC2-CC6.1"
+  })
+}
+
+# Policy: Operator access to production ECS resources (requires MFA)
+resource "aws_iam_policy" "production_operator" {
+  count = local.is_production && var.require_mfa_for_production ? 1 : 0
+
+  name        = "${local.name_prefix}-production-operator"
+  description = "Operator access to production ECS resources - requires MFA"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ECSOperatorAccess"
+        Effect = "Allow"
+        Action = [
+          "ecs:Describe*",
+          "ecs:List*",
+          "ecs:UpdateService",
+          "ecs:StopTask",
+          "ecs:ExecuteCommand"
+        ]
+        Resource = [
+          "arn:aws:ecs:${var.aws_region}:${var.aws_account_id}:cluster/${local.name_prefix}-*",
+          "arn:aws:ecs:${var.aws_region}:${var.aws_account_id}:service/${local.name_prefix}-*/*",
+          "arn:aws:ecs:${var.aws_region}:${var.aws_account_id}:task/${local.name_prefix}-*/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "ECSTaskDefinitionAccess"
+        Effect = "Allow"
+        Action = [
+          "ecs:DescribeTaskDefinition",
+          "ecs:ListTaskDefinitions"
+        ]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "ECROperatorAccess"
+        Effect = "Allow"
+        Action = [
+          "ecr:Describe*",
+          "ecr:List*",
+          "ecr:GetAuthorizationToken",
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer"
+        ]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "SecretsReadOnly"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:Describe*",
+          "secretsmanager:List*"
+        ]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${local.name_prefix}-*"
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "CloudWatchFullAccess"
+        Effect = "Allow"
+        Action = [
+          "logs:*",
+          "cloudwatch:*"
+        ]
+        Resource = [
+          "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/ecs/${local.name_prefix}-*:*",
+          "arn:aws:cloudwatch:${var.aws_region}:${var.aws_account_id}:alarm:${local.name_prefix}-*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "SSMSessionManager"
+        Effect = "Allow"
+        Action = [
+          "ssmmessages:CreateControlChannel",
+          "ssmmessages:CreateDataChannel",
+          "ssmmessages:OpenControlChannel",
+          "ssmmessages:OpenDataChannel"
+        ]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name       = "${local.name_prefix}-production-operator"
+    Purpose    = "ProductionOperatorAccess"
+    Compliance = "NIST-AC-3,SOC2-CC6.1"
+  })
+}
+
+# Policy: Admin access to production ECS resources (requires MFA)
+resource "aws_iam_policy" "production_admin" {
+  count = local.is_production && var.require_mfa_for_production ? 1 : 0
+
+  name        = "${local.name_prefix}-production-admin"
+  description = "Admin access to production ECS resources - requires MFA"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "ECSAdminAccess"
+        Effect = "Allow"
+        Action = [
+          "ecs:*"
+        ]
+        Resource = [
+          "arn:aws:ecs:${var.aws_region}:${var.aws_account_id}:cluster/${local.name_prefix}-*",
+          "arn:aws:ecs:${var.aws_region}:${var.aws_account_id}:service/${local.name_prefix}-*/*",
+          "arn:aws:ecs:${var.aws_region}:${var.aws_account_id}:task/${local.name_prefix}-*/*",
+          "arn:aws:ecs:${var.aws_region}:${var.aws_account_id}:task-definition/${local.name_prefix}-*:*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "ECSGlobalActions"
+        Effect = "Allow"
+        Action = [
+          "ecs:DescribeTaskDefinition",
+          "ecs:ListTaskDefinitions",
+          "ecs:RegisterTaskDefinition",
+          "ecs:DeregisterTaskDefinition"
+        ]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "ECRAdminAccess"
+        Effect = "Allow"
+        Action = [
+          "ecr:*"
+        ]
+        Resource = "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.name_prefix}-*"
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "ECRGlobalActions"
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken"
+        ]
+        Resource = "*"
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "SecretsAdminAccess"
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:*"
+        ]
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${var.aws_account_id}:secret:${local.name_prefix}-*"
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "KMSAdminAccess"
+        Effect = "Allow"
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey",
+          "kms:CreateGrant",
+          "kms:ListGrants",
+          "kms:RevokeGrant"
+        ]
+        Resource = [
+          aws_kms_key.ecs.arn,
+          aws_kms_key.ecr.arn,
+          aws_kms_key.secrets.arn,
+          aws_kms_key.cloudwatch.arn,
+          aws_kms_key.s3.arn
+        ]
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "CloudWatchAdminAccess"
+        Effect = "Allow"
+        Action = [
+          "logs:*",
+          "cloudwatch:*"
+        ]
+        Resource = [
+          "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/ecs/${local.name_prefix}-*",
+          "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:log-group:/ecs/${local.name_prefix}-*:*",
+          "arn:aws:cloudwatch:${var.aws_region}:${var.aws_account_id}:alarm:${local.name_prefix}-*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      },
+      {
+        Sid    = "PassRole"
+        Effect = "Allow"
+        Action = [
+          "iam:PassRole"
+        ]
+        Resource = [
+          aws_iam_role.ecs_task_execution.arn,
+          aws_iam_role.ecs_task.arn
+        ]
+        Condition = {
+          Bool = {
+            "aws:MultiFactorAuthPresent" = "true"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = merge(local.common_tags, {
+    Name       = "${local.name_prefix}-production-admin"
+    Purpose    = "ProductionAdminAccess"
+    Compliance = "NIST-AC-3,SOC2-CC6.1"
+  })
+}
+
 # IAM Policy to restrict destructive actions in production
 resource "aws_iam_policy" "production_protection" {
   count = local.is_production ? 1 : 0

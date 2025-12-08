@@ -186,3 +186,86 @@ The module creates three security groups for ECS services following the principl
 ## Cost Optimization
 
 For non-production environments, set `single_nat_gateway = true` to use a single NAT Gateway instead of one per AZ. This reduces costs but also reduces availability.
+
+
+## VPC Isolation for Production
+
+The module supports VPC isolation between production and non-production environments as required by NIST and SOC-2 compliance (Requirement 10.4).
+
+### CIDR Block Separation
+
+Production and non-production environments use distinct CIDR ranges to ensure network isolation:
+
+| Environment | CIDR Block | Description |
+|-------------|------------|-------------|
+| develop | 10.0.0.0/16 | Development environment |
+| test | 10.1.0.0/16 | Test environment |
+| qa | 10.2.0.0/16 | QA environment |
+| prod | 10.100.0.0/16 | Production environment |
+
+The module validates that:
+- Production VPCs use the `10.100.x.x` CIDR range
+- Non-production VPCs do NOT use the `10.100.x.x` CIDR range
+
+### VPC Peering (Optional)
+
+If cross-environment communication is required, the module supports VPC peering:
+
+```hcl
+module "networking" {
+  source = "./modules/networking"
+
+  environment        = "prod"
+  project_name       = "ecs-fargate"
+  vpc_cidr           = "10.100.0.0/16"
+  availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+
+  # Production VPC isolation
+  is_production              = true
+  production_vpc_cidr_prefix = "10.100."
+
+  # VPC Peering (optional - for cross-environment communication)
+  enable_vpc_peering = true
+  vpc_peering_connections = [
+    {
+      peer_vpc_id      = "vpc-xxxxxxxxx"  # Non-production VPC ID
+      peer_vpc_cidr    = "10.0.0.0/16"    # Non-production VPC CIDR
+      name             = "prod-to-develop"
+      allow_remote_dns = true
+    }
+  ]
+
+  tags = {
+    Team = "platform"
+  }
+}
+```
+
+### VPC Peering Inputs
+
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| is_production | Whether this is a production environment | `bool` | `false` | no |
+| production_vpc_cidr_prefix | Expected CIDR prefix for production VPCs | `string` | `"10.100."` | no |
+| non_production_vpc_cidr_prefixes | Expected CIDR prefixes for non-production VPCs | `list(string)` | `["10.0.", "10.1.", "10.2."]` | no |
+| enable_vpc_peering | Enable VPC peering connections | `bool` | `false` | no |
+| vpc_peering_connections | List of VPC peering connections to create | `list(object)` | `[]` | no |
+
+### VPC Peering Outputs
+
+| Name | Description |
+|------|-------------|
+| vpc_peering_connection_ids | List of VPC peering connection IDs |
+| vpc_peering_connection_statuses | Map of VPC peering connection names to their status |
+| is_production_vpc | Whether this VPC is configured as a production VPC |
+| vpc_isolation_validated | Whether VPC isolation validation passed |
+
+### Security Considerations for VPC Peering
+
+When enabling VPC peering between production and non-production:
+
+1. **Limit peering scope**: Only peer when absolutely necessary
+2. **Use security groups**: Restrict traffic between peered VPCs using security groups
+3. **Monitor traffic**: Enable VPC Flow Logs on both VPCs
+4. **Document justification**: Document the business need for cross-environment communication
+5. **Review regularly**: Periodically review and remove unnecessary peering connections

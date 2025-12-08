@@ -197,3 +197,85 @@ variable "fargate_spot_enabled" {
   description = "Enable Fargate Spot for non-production environments (ignored in production)"
   default     = true
 }
+
+# =============================================================================
+# ALB Configuration
+# =============================================================================
+
+variable "certificate_arn" {
+  type        = string
+  description = "ARN of the ACM certificate for HTTPS listener"
+  default     = ""
+}
+
+# =============================================================================
+# VPC Isolation Configuration
+# Requirements: 10.4
+# =============================================================================
+
+variable "production_vpc_cidr_prefix" {
+  type        = string
+  description = "Expected CIDR prefix for production VPCs (used for isolation validation)"
+  default     = "10.100."
+
+  validation {
+    condition     = can(regex("^\\d{1,3}\\.\\d{1,3}\\.$", var.production_vpc_cidr_prefix))
+    error_message = "Production VPC CIDR prefix must be in format 'X.X.' (e.g., '10.100.')"
+  }
+}
+
+variable "non_production_vpc_cidr_prefixes" {
+  type        = list(string)
+  description = "Expected CIDR prefixes for non-production VPCs (used for isolation validation)"
+  default     = ["10.0.", "10.1.", "10.2."]
+}
+
+variable "enable_vpc_peering" {
+  type        = bool
+  description = "Enable VPC peering connections to other environments"
+  default     = false
+}
+
+variable "vpc_peering_connections" {
+  type = list(object({
+    peer_vpc_id      = string
+    peer_vpc_cidr    = string
+    peer_owner_id    = optional(string)
+    peer_region      = optional(string)
+    name             = string
+    allow_remote_dns = optional(bool, true)
+  }))
+  description = "List of VPC peering connections to create for cross-environment communication"
+  default     = []
+
+  validation {
+    condition = alltrue([
+      for conn in var.vpc_peering_connections : can(cidrhost(conn.peer_vpc_cidr, 0))
+    ])
+    error_message = "All peer VPC CIDRs must be valid IPv4 CIDR blocks"
+  }
+}
+
+
+# =============================================================================
+# AWS Config Configuration
+# Requirements: 11.5
+# =============================================================================
+
+variable "enable_config_aggregator" {
+  type        = bool
+  description = "Enable AWS Config aggregator for multi-account/multi-region compliance tracking"
+  default     = false
+}
+
+variable "config_aggregator_account_ids" {
+  type        = list(string)
+  description = "List of AWS account IDs to aggregate Config data from (for multi-account setup)"
+  default     = []
+}
+
+variable "config_aggregator_regions" {
+  type        = list(string)
+  description = "List of AWS regions to aggregate Config data from (empty = all regions)"
+  default     = []
+}

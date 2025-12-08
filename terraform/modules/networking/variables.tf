@@ -105,3 +105,45 @@ variable "additional_internal_cidr_blocks" {
   description = "Additional CIDR blocks allowed to access internal services"
   default     = []
 }
+
+# =============================================================================
+# VPC Peering Variables (for cross-environment communication)
+# Requirements: 10.4
+# =============================================================================
+
+variable "enable_vpc_peering" {
+  type        = bool
+  description = "Enable VPC peering connections to other environments"
+  default     = false
+}
+
+variable "vpc_peering_connections" {
+  type = list(object({
+    peer_vpc_id      = string
+    peer_vpc_cidr    = string
+    peer_owner_id    = optional(string)
+    peer_region      = optional(string)
+    name             = string
+    allow_remote_dns = optional(bool, true)
+  }))
+  description = "List of VPC peering connections to create"
+  default     = []
+}
+
+variable "is_production" {
+  type        = bool
+  description = "Whether this is a production environment (enables stricter isolation)"
+  default     = false
+}
+
+variable "production_vpc_cidr_prefix" {
+  type        = string
+  description = "Expected CIDR prefix for production VPCs (used for validation)"
+  default     = "10.100."
+}
+
+variable "non_production_vpc_cidr_prefixes" {
+  type        = list(string)
+  description = "Expected CIDR prefixes for non-production VPCs (used for validation)"
+  default     = ["10.0.", "10.1.", "10.2."]
+}

@@ -544,3 +544,105 @@ resource "aws_security_group_rule" "internal_services_to_kafka" {
   security_group_id        = aws_security_group.internal_services[0].id
   description              = "Allow Kafka protocol traffic to Kafka cluster"
 }
+
+
+# =============================================================================
+# VPC Peering Connections (for cross-environment communication)
+# Requirements: 10.4
+# =============================================================================
+
+# VPC Peering Connection Requester
+resource "aws_vpc_peering_connection" "peer" {
+  count = var.enable_vpc_peering ? length(var.vpc_peering_connections) : 0
+
+  vpc_id        = aws_vpc.main.id
+  peer_vpc_id   = var.vpc_peering_connections[count.index].peer_vpc_id
+  peer_owner_id = var.vpc_peering_connections[count.index].peer_owner_id
+  peer_region   = var.vpc_peering_connections[count.index].peer_region
+  auto_accept   = var.vpc_peering_connections[count.index].peer_owner_id == null && var.vpc_peering_connections[count.index].peer_region == null
+
+  tags = merge(local.common_tags, {
+    Name = "${local.name_prefix}-peering-${var.vpc_peering_connections[count.index].name}"
+    Side = "Requester"
+  })
+}
+
+# VPC Peering Connection Options (for same-account, same-region peering)
+resource "aws_vpc_peering_connection_options" "peer" {
+  count = var.enable_vpc_peering ? length([
+    for conn in var.vpc_peering_connections : conn
+    if conn.peer_owner_id == null && conn.peer_region == null
+  ]) : 0
+
+  vpc_peering_connection_id = aws_vpc_peering_connection.peer[count.index].id
+
+  requester {
+    allow_remote_vpc_dns_resolution = var.vpc_peering_connections[count.index].allow_remote_dns
+  }
+
+  accepter {
+    allow_remote_vpc_dns_resolution = var.vpc_peering_connections[count.index].allow_remote_dns
+  }
+
+  depends_on = [aws_vpc_peering_connection.peer]
+}
+
+# Route to peer VPC from public subnets
+resource "aws_route" "public_to_peer" {
+  count = var.enable_vpc_peering ? length(var.vpc_peering_connections) : 0
+
+  route_table_id            = aws_route_table.public.id
+  destination_cidr_block    = var.vpc_peering_connections[count.index].peer_vpc_cidr
+  vpc_peering_connection_id = aws_vpc_peering_connection.peer[count.index].id
+}
+
+# Route to peer VPC from private subnets
+resource "aws_route" "private_to_peer" {
+  count = var.enable_vpc_peering ? length(var.vpc_peering_connections) * length(aws_route_table.private) : 0
+
+  route_table_id            = aws_route_table.private[count.index % length(aws_route_table.private)].id
+  destination_cidr_block    = var.vpc_peering_connections[floor(count.index / length(aws_route_table.private))].peer_vpc_cidr
+  vpc_peering_connection_id = aws_vpc_peering_connection.peer[floor(count.index / length(aws_route_table.private))].id
+}
+
+# =============================================================================
+# Production VPC Isolation Validation
+# Requirements: 10.4
+# =============================================================================
+
+# This resource validates that production VPCs use the expected CIDR range
+# and non-production VPCs use different CIDR ranges
+resource "null_resource" "vpc_isolation_validation" {
+  count = var.is_production ? 1 : 0
+
+  # Trigger validation on VPC CIDR changes
+  triggers = {
+    vpc_cidr      = var.vpc_cidr
+    is_production = var.is_production
+  }
+
+  # Validation is performed via Terraform's lifecycle
+  lifecycle {
+    precondition {
+      condition     = startswith(var.vpc_cidr, var.production_vpc_cidr_prefix)
+      error_message = "Production VPC CIDR must start with ${var.production_vpc_cidr_prefix} for proper isolation. Current CIDR: ${var.vpc_cidr}"
+    }
+  }
+}
+
+# Validation for non-production environments
+resource "null_resource" "non_production_vpc_validation" {
+  count = !var.is_production ? 1 : 0
+
+  triggers = {
+    vpc_cidr      = var.vpc_cidr
+    is_production = var.is_production
+  }
+
+  lifecycle {
+    precondition {
+      condition     = !startswith(var.vpc_cidr, var.production_vpc_cidr_prefix)
+      error_message = "Non-production VPC CIDR must NOT start with ${var.production_vpc_cidr_prefix} to maintain isolation from production. Current CIDR: ${var.vpc_cidr}"
+    }
+  }
+}
