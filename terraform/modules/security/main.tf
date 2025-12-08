@@ -768,31 +768,47 @@ resource "aws_iam_role_policy" "codepipeline_ecs" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "ECS"
+        Sid    = "ECSDescribe"
         Effect = "Allow"
         Action = [
           "ecs:DescribeServices",
           "ecs:DescribeTaskDefinition",
           "ecs:DescribeTasks",
-          "ecs:ListTasks",
-          "ecs:RegisterTaskDefinition",
-          "ecs:UpdateService"
+          "ecs:ListTasks"
         ]
         Resource = "*"
+      },
+      {
+        Sid    = "ECSRegisterTaskDefinition"
+        Effect = "Allow"
+        Action = [
+          "ecs:RegisterTaskDefinition"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "ECSTagResource"
+        Effect = "Allow"
+        Action = [
+          "ecs:TagResource"
+        ]
+        Resource = "arn:aws:ecs:${var.aws_region}:${var.aws_account_id}:task-definition/*:*"
         Condition = {
           StringEquals = {
-            "aws:ResourceTag/Environment" = var.environment
+            "ecs:CreateAction" = "RegisterTaskDefinition"
           }
         }
       },
       {
-        Sid    = "ECSUnconditional"
+        Sid    = "ECSUpdateService"
         Effect = "Allow"
         Action = [
-          "ecs:RegisterTaskDefinition",
-          "ecs:DescribeTaskDefinition"
+          "ecs:UpdateService"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:ecs:${var.aws_region}:${var.aws_account_id}:service/${local.name_prefix}-*/*",
+          "arn:aws:ecs:${var.aws_region}:${var.aws_account_id}:service/*/${local.name_prefix}-*"
+        ]
       },
       {
         Sid    = "PassRole"
@@ -801,9 +817,16 @@ resource "aws_iam_role_policy" "codepipeline_ecs" {
           "iam:PassRole"
         ]
         Resource = [
-          aws_iam_role.ecs_task_execution.arn,
-          aws_iam_role.ecs_task.arn
+          "arn:aws:iam::${var.aws_account_id}:role/${local.name_prefix}-*"
         ]
+        Condition = {
+          StringEquals = {
+            "iam:PassedToService" = [
+              "ecs.amazonaws.com",
+              "ecs-tasks.amazonaws.com"
+            ]
+          }
+        }
       }
     ]
   })

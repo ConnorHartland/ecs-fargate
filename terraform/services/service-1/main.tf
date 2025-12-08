@@ -116,7 +116,7 @@ module "service_1" {
   branch_pattern      = local.environment == "prod" ? "main" : local.environment == "test" || local.environment == "qa" ? "release" : "develop"
   pipeline_type       = local.environment == "prod" ? "production" : "release"
   enable_pipeline     = true  # CI/CD pipeline enabled
-  buildspec_path      = "buildspec.yml"  # Use buildspec.yml from service repository
+  buildspec_path      = ""  # Use inline default buildspec from CICD module
 
   notification_sns_topic_arn = local.notification_sns_topic_arn
   approval_sns_topic_arn     = local.approval_sns_topic_arn
