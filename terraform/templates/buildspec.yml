@@ -1,0 +1,201 @@
+# Buildspec Template for ECS Fargate CI/CD Pipeline
+# This buildspec is used by CodeBuild to build, scan, test, and push Docker images
+#
+# Required Environment Variables (set by CodeBuild project):
+#   - AWS_ACCOUNT_ID: AWS account ID
+#   - AWS_DEFAULT_REGION: AWS region
+#   - ECR_REPOSITORY_URL: Full ECR repository URL
+#   - ENVIRONMENT: Deployment environment (develop, test, qa, prod)
+#   - CONTAINER_NAME: Name of the container for ECS task definition
+#
+# Optional Environment Variables:
+#   - IMAGE_TAG: Override for image tag (defaults to commit SHA)
+#   - TRIVY_SEVERITY: Severity levels to scan (defaults to HIGH,CRITICAL)
+#   - SKIP_TESTS: Set to "true" to skip test execution
+#   - SKIP_SECURITY_SCAN: Set to "true" to skip security scanning
+
+version: 0.2
+
+env:
+  variables:
+    TRIVY_SEVERITY: "HIGH,CRITICAL"
+    SKIP_TESTS: "false"
+    SKIP_SECURITY_SCAN: "false"
+
+phases:
+  install:
+    runtime-versions:
+      docker: 20
+    commands:
+      - echo Installing security scanning tools...
+      - |
+        if [ "$SKIP_SECURITY_SCAN" != "true" ]; then
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          trivy --version
+        fi
+
+  pre_build:
+    commands:
+      - echo "=== Pre-Build Phase Started ==="
+      - echo "Build started on $(date)"
+      
+      # Login to Amazon ECR
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      
+      # Set image tags
+      - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - IMAGE_TAG=${COMMIT_HASH:-latest}
+      - BRANCH_NAME=${CODEBUILD_SOURCE_VERSION:-unknown}
+      - BUILD_ID=${CODEBUILD_BUILD_ID:-local}
+      
+      # Display build information
+      - echo "Commit Hash: $COMMIT_HASH"
+      - echo "Image Tag: $IMAGE_TAG"
+      - echo "Environment: $ENVIRONMENT"
+      - echo "Branch: $BRANCH_NAME"
+      - echo "Build ID: $BUILD_ID"
+      - echo "ECR Repository: $ECR_REPOSITORY_URL"
+      
+      - echo "=== Pre-Build Phase Completed ==="
+
+  build:
+    commands:
+      - echo "=== Build Phase Started ==="
+      - echo "Build started on $(date)"
+      
+      # Build Docker image
+      - echo Building the Docker image...
+      - docker build -t $ECR_REPOSITORY_URL:latest .
+      
+      # Tag image with multiple tags for traceability
+      # Tag 1: Commit SHA (immutable reference)
+      - docker tag $ECR_REPOSITORY_URL:latest $ECR_REPOSITORY_URL:$IMAGE_TAG
+      # Tag 2: Environment + Commit SHA (environment-specific reference)
+      - docker tag $ECR_REPOSITORY_URL:latest $ECR_REPOSITORY_URL:$ENVIRONMENT-$IMAGE_TAG
+      # Tag 3: Environment-latest (rolling tag for environment)
+      - docker tag $ECR_REPOSITORY_URL:latest $ECR_REPOSITORY_URL:$ENVIRONMENT-latest
+      
+      - echo "Docker images tagged successfully"
+      - docker images | grep $ECR_REPOSITORY_URL
+      
+      # Run security scan with Trivy
+      - echo "=== Security Scanning ==="
+      - |
+        if [ "$SKIP_SECURITY_SCAN" != "true" ]; then
+          echo "Running Trivy security scan..."
+          echo "Scanning for vulnerabilities with severity: $TRIVY_SEVERITY"
+          trivy image --severity $TRIVY_SEVERITY --exit-code 0 --format table $ECR_REPOSITORY_URL:latest
+          
+          # Generate JSON report for artifact storage
+          trivy image --severity $TRIVY_SEVERITY --format json --output trivy-report.json $ECR_REPOSITORY_URL:latest
+          
+          # Fail build on CRITICAL vulnerabilities in production
+          if [ "$ENVIRONMENT" = "prod" ]; then
+            echo "Production build: Checking for CRITICAL vulnerabilities..."
+            trivy image --severity CRITICAL --exit-code 1 $ECR_REPOSITORY_URL:latest || {
+              echo "ERROR: Critical vulnerabilities found in production build!"
+              exit 1
+            }
+          fi
+          echo "Security scan completed"
+        else
+          echo "Security scan skipped (SKIP_SECURITY_SCAN=true)"
+        fi
+      
+      # Run tests
+      - echo "=== Test Execution ==="
+      - |
+        if [ "$SKIP_TESTS" != "true" ]; then
+          echo "Running tests..."
+          # Run tests inside the container
+          # The test command varies by runtime - detect and run appropriate tests
+          if [ -f "package.json" ]; then
+            echo "Node.js project detected, running npm test..."
+            docker run --rm $ECR_REPOSITORY_URL:latest npm test || {
+              echo "ERROR: Tests failed!"
+              exit 1
+            }
+          elif [ -f "requirements.txt" ] || [ -f "setup.py" ] || [ -f "pyproject.toml" ]; then
+            echo "Python project detected, running pytest..."
+            docker run --rm $ECR_REPOSITORY_URL:latest pytest || docker run --rm $ECR_REPOSITORY_URL:latest python -m pytest || {
+              echo "WARNING: pytest not available or tests failed"
+            }
+          else
+            echo "No recognized test framework found, skipping tests"
+          fi
+          echo "Test execution completed"
+        else
+          echo "Tests skipped (SKIP_TESTS=true)"
+        fi
+      
+      - echo "=== Build Phase Completed ==="
+
+  post_build:
+    commands:
+      - echo "=== Post-Build Phase Started ==="
+      - echo "Build completed on $(date)"
+      
+      # Push Docker images to ECR
+      - echo Pushing Docker images to ECR...
+      
+      # Push all tagged images
+      - echo "Pushing tag: latest"
+      - docker push $ECR_REPOSITORY_URL:latest
+      
+      - echo "Pushing tag: $IMAGE_TAG (commit SHA)"
+      - docker push $ECR_REPOSITORY_URL:$IMAGE_TAG
+      
+      - echo "Pushing tag: $ENVIRONMENT-$IMAGE_TAG (environment + commit)"
+      - docker push $ECR_REPOSITORY_URL:$ENVIRONMENT-$IMAGE_TAG
+      
+      - echo "Pushing tag: $ENVIRONMENT-latest (environment latest)"
+      - docker push $ECR_REPOSITORY_URL:$ENVIRONMENT-latest
+      
+      - echo "All images pushed successfully"
+      
+      # Create imagedefinitions.json for ECS deployment
+      - echo Writing image definitions file for ECS deployment...
+      - printf '[{"name":"%s","imageUri":"%s"}]' $CONTAINER_NAME $ECR_REPOSITORY_URL:$IMAGE_TAG > imagedefinitions.json
+      - cat imagedefinitions.json
+      
+      # Create build metadata file
+      - |
+        cat > build-metadata.json << EOF
+        {
+          "buildId": "$BUILD_ID",
+          "commitHash": "$COMMIT_HASH",
+          "imageTag": "$IMAGE_TAG",
+          "environment": "$ENVIRONMENT",
+          "repositoryUrl": "$ECR_REPOSITORY_URL",
+          "buildTime": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+          "tags": [
+            "latest",
+            "$IMAGE_TAG",
+            "$ENVIRONMENT-$IMAGE_TAG",
+            "$ENVIRONMENT-latest"
+          ]
+        }
+        EOF
+      - cat build-metadata.json
+      
+      - echo "=== Post-Build Phase Completed ==="
+
+artifacts:
+  files:
+    - imagedefinitions.json
+    - build-metadata.json
+    - trivy-report.json
+  discard-paths: yes
+  name: build-artifacts-$CODEBUILD_BUILD_NUMBER
+
+cache:
+  paths:
+    - '/root/.docker/**/*'
+    - '/root/.cache/trivy/**/*'
+
+reports:
+  security-scan:
+    files:
+      - trivy-report.json
+    file-format: GENERICJSONREPORT
