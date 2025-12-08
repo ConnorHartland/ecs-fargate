@@ -595,8 +595,9 @@ resource "aws_codepipeline" "this" {
   stage {
     name = "Source"
 
+    # Clone service repository
     action {
-      name             = "Source"
+      name             = "SourceCode"
       category         = "Source"
       owner            = "AWS"
       provider         = "CodeStarSourceConnection"
@@ -610,6 +611,30 @@ resource "aws_codepipeline" "this" {
         OutputArtifactFormat = "CODE_ZIP"
         # For feature branches, we want manual trigger (no webhook)
         DetectChanges = var.pipeline_type == "feature" ? "false" : "true"
+      }
+    }
+
+    # Clone E2E test repository (if enabled)
+    # Source actions can only be in the first stage
+    dynamic "action" {
+      for_each = var.enable_e2e_tests && var.e2e_test_repository_id != "" ? [1] : []
+      
+      content {
+        name             = "E2ETestSource"
+        category         = "Source"
+        owner            = "AWS"
+        provider         = "CodeStarSourceConnection"
+        output_artifacts = ["e2e_test_source"]
+        version          = "1"
+        run_order        = 1
+
+        configuration = {
+          ConnectionArn        = var.codeconnections_arn
+          FullRepositoryId     = var.e2e_test_repository_id
+          BranchName           = var.e2e_test_branch
+          OutputArtifactFormat = "CODE_ZIP"
+          DetectChanges        = "false"  # Don't trigger on test repo changes
+        }
       }
     }
   }
@@ -660,24 +685,7 @@ resource "aws_codepipeline" "this" {
     content {
       name = "E2E-Tests"
 
-      # Clone QA test repository
-      action {
-        name             = "CloneTestRepo"
-        category         = "Source"
-        owner            = "AWS"
-        provider         = "CodeStarSourceConnection"
-        output_artifacts = ["e2e_test_source"]
-        version          = "1"
-
-        configuration = {
-          ConnectionArn        = var.codeconnections_arn
-          FullRepositoryId     = var.e2e_test_repository_id
-          BranchName           = var.e2e_test_branch
-          OutputArtifactFormat = "CODE_ZIP"
-        }
-      }
-
-      # Run E2E tests
+      # Run E2E tests using the test source cloned in Source stage
       action {
         name             = "RunE2ETests"
         category         = "Build"
@@ -686,7 +694,6 @@ resource "aws_codepipeline" "this" {
         input_artifacts  = ["e2e_test_source"]
         output_artifacts = ["e2e_test_results"]
         version          = "1"
-        run_order        = 2
 
         configuration = {
           ProjectName = aws_codebuild_project.e2e_tests[0].name
@@ -734,8 +741,9 @@ resource "aws_codepipeline" "production" {
   stage {
     name = "Source"
 
+    # Clone service repository
     action {
-      name             = "Source"
+      name             = "SourceCode"
       category         = "Source"
       owner            = "AWS"
       provider         = "CodeStarSourceConnection"
@@ -749,6 +757,29 @@ resource "aws_codepipeline" "production" {
         OutputArtifactFormat = "CODE_ZIP"
         # Production pipelines require manual trigger for safety
         DetectChanges = "false"
+      }
+    }
+
+    # Clone E2E test repository (if enabled)
+    dynamic "action" {
+      for_each = var.enable_e2e_tests && var.e2e_test_repository_id != "" ? [1] : []
+      
+      content {
+        name             = "E2ETestSource"
+        category         = "Source"
+        owner            = "AWS"
+        provider         = "CodeStarSourceConnection"
+        output_artifacts = ["e2e_test_source"]
+        version          = "1"
+        run_order        = 1
+
+        configuration = {
+          ConnectionArn        = var.codeconnections_arn
+          FullRepositoryId     = var.e2e_test_repository_id
+          BranchName           = var.e2e_test_branch
+          OutputArtifactFormat = "CODE_ZIP"
+          DetectChanges        = "false"
+        }
       }
     }
   }
@@ -809,6 +840,30 @@ resource "aws_codepipeline" "production" {
         ServiceName       = var.ecs_service_name
         FileName          = "imagedefinitions.json"
         DeploymentTimeout = "15"
+      }
+    }
+  }
+
+  # E2E Test Stage - Run tests after production deployment
+  dynamic "stage" {
+    for_each = var.enable_e2e_tests && var.e2e_test_repository_id != "" ? [1] : []
+    
+    content {
+      name = "E2E-Tests"
+
+      # Run E2E tests using the test source cloned in Source stage
+      action {
+        name             = "RunE2ETests"
+        category         = "Build"
+        owner            = "AWS"
+        provider         = "CodeBuild"
+        input_artifacts  = ["e2e_test_source"]
+        output_artifacts = ["e2e_test_results"]
+        version          = "1"
+
+        configuration = {
+          ProjectName = aws_codebuild_project.e2e_tests[0].name
+        }
       }
     }
   }
