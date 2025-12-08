@@ -30,7 +30,7 @@ locals {
   # Default health check command based on runtime
   default_health_check_command = var.runtime == "nodejs" ? [
     "CMD-SHELL",
-    "curl -f http://localhost:${var.container_port}/health || exit 1"
+    "node -e \"require('http').get('http://localhost:${var.container_port}/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))\""
     ] : [
     "CMD-SHELL",
     "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:${var.container_port}/health')\" || exit 1"

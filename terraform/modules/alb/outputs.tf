@@ -40,8 +40,8 @@ output "alb_name" {
 # =============================================================================
 
 output "https_listener_arn" {
-  description = "ARN of the HTTPS listener"
-  value       = aws_lb_listener.https.arn
+  description = "ARN of the HTTPS listener (null if certificate not provided)"
+  value       = var.certificate_arn != "" ? aws_lb_listener.https[0].arn : null
 }
 
 output "http_listener_arn" {
@@ -92,8 +92,8 @@ output "access_logs_bucket_domain_name" {
 # =============================================================================
 
 output "alb_url" {
-  description = "HTTPS URL of the Application Load Balancer"
-  value       = "https://${aws_lb.main.dns_name}"
+  description = "URL of the Application Load Balancer"
+  value       = var.certificate_arn != "" ? "https://${aws_lb.main.dns_name}" : "http://${aws_lb.main.dns_name}"
 }
 
 output "deletion_protection_enabled" {
@@ -102,8 +102,8 @@ output "deletion_protection_enabled" {
 }
 
 output "ssl_policy" {
-  description = "SSL policy used by the HTTPS listener"
-  value       = aws_lb_listener.https.ssl_policy
+  description = "SSL policy used by the HTTPS listener (null if HTTPS not enabled)"
+  value       = var.certificate_arn != "" ? aws_lb_listener.https[0].ssl_policy : null
 }
 
 # =============================================================================

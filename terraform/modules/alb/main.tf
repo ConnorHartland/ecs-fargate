@@ -252,10 +252,12 @@ resource "aws_lb" "main" {
 
 
 # =============================================================================
-# HTTPS Listener (Port 443)
+# HTTPS Listener (Port 443) - Only created if certificate_arn is provided
 # =============================================================================
 
 resource "aws_lb_listener" "https" {
+  count = var.certificate_arn != "" ? 1 : 0
+
   load_balancer_arn = aws_lb.main.arn
   port              = 443
   protocol          = "HTTPS"
@@ -360,7 +362,7 @@ resource "aws_lb_target_group" "services" {
 resource "aws_lb_listener_rule" "services" {
   for_each = var.target_groups
 
-  listener_arn = aws_lb_listener.https.arn
+  listener_arn = var.certificate_arn != "" ? aws_lb_listener.https[0].arn : aws_lb_listener.http.arn
   priority     = each.value.priority
 
   action {

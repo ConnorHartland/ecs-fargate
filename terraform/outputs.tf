@@ -221,6 +221,21 @@ output "alb_security_group_id" {
   value       = module.alb.security_group_id
 }
 
+output "alb_listener_arn" {
+  description = "ARN of the ALB listener (HTTPS if certificate provided, otherwise HTTP)"
+  value       = module.alb.https_listener_arn != null ? module.alb.https_listener_arn : module.alb.http_listener_arn
+}
+
+output "alb_https_listener_arn" {
+  description = "ARN of the HTTPS listener (null if no certificate)"
+  value       = module.alb.https_listener_arn
+}
+
+output "alb_http_listener_arn" {
+  description = "ARN of the HTTP listener"
+  value       = module.alb.http_listener_arn
+}
+
 # =============================================================================
 # Monitoring Outputs
 # =============================================================================

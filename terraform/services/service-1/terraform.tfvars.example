@@ -1,0 +1,8 @@
+# Example tfvars for service-1
+# Copy this to terraform.tfvars and fill in your values
+# Get these values from: cd ../../ && terraform output
+
+# You can get all these values by running:
+# cd ../../ && terraform output -json > outputs.json
+
+# Then manually copy the values here, or use remote state (see provider.tf)

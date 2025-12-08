@@ -438,3 +438,51 @@ variable "tags" {
   description = "Additional tags to apply to all resources"
   default     = {}
 }
+
+
+# =============================================================================
+# E2E Testing Configuration
+# =============================================================================
+
+variable "enable_e2e_tests" {
+  type        = bool
+  description = "Whether to enable E2E testing stage after deployment"
+  default     = false
+}
+
+variable "e2e_test_repository_id" {
+  type        = string
+  description = "Full repository ID for E2E test repo (e.g., 'owner/qa-tests')"
+  default     = ""
+}
+
+variable "e2e_test_branch" {
+  type        = string
+  description = "Branch to use for E2E tests"
+  default     = "main"
+}
+
+variable "e2e_test_buildspec" {
+  type        = string
+  description = "Custom buildspec content for E2E tests (optional)"
+  default     = ""
+}
+
+variable "e2e_test_environment_variables" {
+  type        = map(string)
+  description = "Environment variables to pass to E2E tests (e.g., API_URL, ENVIRONMENT)"
+  default     = {}
+}
+
+variable "e2e_test_timeout_minutes" {
+  type        = number
+  description = "Timeout for E2E tests in minutes"
+  default     = 30
+}
+
+
+variable "buildspec_path" {
+  type        = string
+  description = "Path to custom buildspec file in service repository (relative to repo root)"
+  default     = ""
+}

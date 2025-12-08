@@ -41,8 +41,9 @@ variable "public_subnet_ids" {
 }
 
 variable "certificate_arn" {
-  description = "ARN of the ACM certificate for HTTPS listener"
+  description = "ARN of the ACM certificate for HTTPS listener (leave empty to disable HTTPS)"
   type        = string
+  default     = ""
 }
 
 # =============================================================================

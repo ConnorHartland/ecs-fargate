@@ -547,9 +547,15 @@ resource "aws_iam_role_policy" "codebuild_ecr" {
           "ecr:PutImage",
           "ecr:InitiateLayerUpload",
           "ecr:UploadLayerPart",
-          "ecr:CompleteLayerUpload"
+          "ecr:CompleteLayerUpload",
+          "ecr:DescribeImages",
+          "ecr:DescribeImageScanFindings",
+          "ecr:StartImageScan"
         ]
-        Resource = "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.name_prefix}-*"
+        Resource = [
+          "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/${local.name_prefix}-*",
+          "arn:aws:ecr:${var.aws_region}:${var.aws_account_id}:repository/*"
+        ]
       },
       {
         Sid    = "ECREncryption"
@@ -704,20 +710,30 @@ resource "aws_iam_role_policy" "codepipeline_codeconnections" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "CodeStarConnections"
+        Effect = "Allow"
+        Action = [
+          "codestar-connections:UseConnection",
+          "codestar-connections:GetConnection",
+          "codestar-connections:PassConnection"
+        ]
+        Resource = [
+          "arn:aws:codestar-connections:${var.aws_region}:${var.aws_account_id}:connection/*",
+          "arn:aws:codeconnections:${var.aws_region}:${var.aws_account_id}:connection/*"
+        ]
+      },
+      {
         Sid    = "CodeConnections"
         Effect = "Allow"
         Action = [
-          "codestar-connections:UseConnection"
+          "codeconnections:UseConnection",
+          "codeconnections:GetConnection",
+          "codeconnections:PassConnection"
         ]
-        Resource = "arn:aws:codestar-connections:${var.aws_region}:${var.aws_account_id}:connection/*"
-      },
-      {
-        Sid    = "CodeConnectionsNew"
-        Effect = "Allow"
-        Action = [
-          "codeconnections:UseConnection"
+        Resource = [
+          "arn:aws:codestar-connections:${var.aws_region}:${var.aws_account_id}:connection/*",
+          "arn:aws:codeconnections:${var.aws_region}:${var.aws_account_id}:connection/*"
         ]
-        Resource = "arn:aws:codeconnections:${var.aws_region}:${var.aws_account_id}:connection/*"
       }
     ]
   })

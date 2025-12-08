@@ -334,6 +334,7 @@ module "ecs_service" {
 # =============================================================================
 
 module "cicd" {
+  count  = var.enable_pipeline ? 1 : 0
   source = "../cicd"
 
   service_name = var.service_name
@@ -345,7 +346,7 @@ module "cicd" {
 
   ecr_repository_url = module.ecr.repository_url
   codebuild_role_arn = var.codebuild_role_arn
-  kms_key_arn        = var.kms_key_arn
+  kms_key_arn        = local.kms_key_cloudwatch_arn  # Use CloudWatch KMS key for logs
   s3_kms_key_arn     = local.kms_key_s3_arn
 
   # Pipeline configuration
@@ -369,6 +370,15 @@ module "cicd" {
   log_retention_days    = local.effective_log_retention
   build_timeout_minutes = 30
   compute_type          = "BUILD_GENERAL1_SMALL"
+  buildspec_path        = var.buildspec_path
+
+  # E2E Testing configuration
+  enable_e2e_tests              = var.enable_e2e_tests
+  e2e_test_repository_id        = var.e2e_test_repository_id
+  e2e_test_branch               = var.e2e_test_branch
+  e2e_test_buildspec            = var.e2e_test_buildspec
+  e2e_test_environment_variables = var.e2e_test_environment_variables
+  e2e_test_timeout_minutes      = var.e2e_test_timeout_minutes
 
   tags = local.common_tags
 

@@ -61,32 +61,32 @@ output "ecr_repository_name" {
 
 output "pipeline_name" {
   description = "Name of the CodePipeline"
-  value       = module.cicd.pipeline_name
+  value       = var.enable_pipeline ? module.cicd[0].pipeline_name : null
 }
 
 output "pipeline_arn" {
   description = "ARN of the CodePipeline"
-  value       = module.cicd.pipeline_arn
+  value       = var.enable_pipeline ? module.cicd[0].pipeline_arn : null
 }
 
 output "codebuild_project_name" {
   description = "Name of the CodeBuild project"
-  value       = module.cicd.codebuild_project_name
+  value       = var.enable_pipeline ? module.cicd[0].codebuild_project_name : null
 }
 
 output "codebuild_project_arn" {
   description = "ARN of the CodeBuild project"
-  value       = module.cicd.codebuild_project_arn
+  value       = var.enable_pipeline ? module.cicd[0].codebuild_project_arn : null
 }
 
 output "pipeline_type" {
   description = "Type of pipeline (feature, release, production)"
-  value       = module.cicd.pipeline_type
+  value       = var.enable_pipeline ? module.cicd[0].pipeline_type : null
 }
 
 output "branch_pattern" {
   description = "Branch pattern configured for the pipeline"
-  value       = module.cicd.branch_pattern
+  value       = var.enable_pipeline ? module.cicd[0].branch_pattern : null
 }
 
 # =============================================================================
@@ -248,15 +248,15 @@ output "circuit_breaker_rollback_enabled" {
 
 output "notification_topic_arn" {
   description = "ARN of the SNS topic for pipeline notifications"
-  value       = module.cicd.notification_topic_arn
+  value       = var.enable_pipeline ? module.cicd[0].notification_topic_arn : null
 }
 
 output "approval_topic_arn" {
   description = "ARN of the SNS topic for production approval notifications"
-  value       = module.cicd.approval_topic_arn
+  value       = var.enable_pipeline ? module.cicd[0].approval_topic_arn : null
 }
 
 output "notifications_enabled" {
   description = "Whether pipeline notifications are enabled"
-  value       = module.cicd.notifications_enabled
+  value       = var.enable_pipeline ? module.cicd[0].notifications_enabled : false
 }

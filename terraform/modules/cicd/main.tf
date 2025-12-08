@@ -8,6 +8,14 @@ locals {
   # Use s3_kms_key_arn if provided, otherwise fall back to kms_key_arn
   s3_kms_key_arn = var.s3_kms_key_arn != "" ? var.s3_kms_key_arn : var.kms_key_arn
 
+  # CodePipeline has strict tag requirements - filter out tags with special chars
+  # CodePipeline tags can only contain: letters, numbers, spaces, and _ . : / = + - @
+  pipeline_safe_tags = {
+    for k, v in var.tags : k => v
+    # Filter out tags that commonly have problematic values
+    if !contains(["BranchPattern"], k)
+  }
+  
   common_tags = merge(var.tags, {
     Module      = "cicd"
     ServiceName = var.service_name
@@ -343,8 +351,10 @@ resource "aws_codebuild_project" "this" {
   }
 
   source {
-    type      = var.enable_pipeline ? "CODEPIPELINE" : "NO_SOURCE"
-    buildspec = var.buildspec_path != "" ? file(var.buildspec_path) : local.default_buildspec
+    type = var.enable_pipeline ? "CODEPIPELINE" : "NO_SOURCE"
+    # If buildspec_path is provided, CodeBuild will look for it in the source repository
+    # If empty, use the inline default buildspec
+    buildspec = var.buildspec_path != "" ? var.buildspec_path : local.default_buildspec
   }
 
   cache {
@@ -364,6 +374,131 @@ resource "aws_codebuild_project" "this" {
 
   tags = merge(local.common_tags, {
     Name = local.project_name
+  })
+}
+
+# =============================================================================
+# CodeBuild Project for E2E Tests
+# Runs tests from separate QA repository after deployment
+# =============================================================================
+
+resource "aws_cloudwatch_log_group" "e2e_tests" {
+  count             = var.enable_e2e_tests ? 1 : 0
+  name              = "/aws/codebuild/${local.project_name}-e2e-tests"
+  retention_in_days = var.log_retention_days
+  kms_key_id        = var.kms_key_arn
+
+  tags = merge(local.common_tags, {
+    Name    = "/aws/codebuild/${local.project_name}-e2e-tests"
+    Purpose = "E2ETestLogs"
+  })
+}
+
+resource "aws_codebuild_project" "e2e_tests" {
+  count         = var.enable_e2e_tests ? 1 : 0
+  name          = "${local.project_name}-e2e-tests"
+  description   = "Run E2E tests for ${var.service_name} service"
+  service_role  = var.codebuild_role_arn
+  build_timeout = var.e2e_test_timeout_minutes
+
+  artifacts {
+    type = "CODEPIPELINE"
+  }
+
+  environment {
+    compute_type                = var.compute_type
+    image                       = var.build_image
+    type                        = "LINUX_CONTAINER"
+    image_pull_credentials_type = "CODEBUILD"
+    privileged_mode             = false
+
+    environment_variable {
+      name  = "ENVIRONMENT"
+      value = var.environment
+    }
+
+    environment_variable {
+      name  = "SERVICE_NAME"
+      value = var.service_name
+    }
+
+    # Add custom environment variables for E2E tests
+    dynamic "environment_variable" {
+      for_each = var.e2e_test_environment_variables
+      content {
+        name  = environment_variable.key
+        value = environment_variable.value
+      }
+    }
+  }
+
+  source {
+    type = "CODEPIPELINE"
+    buildspec = var.e2e_test_buildspec != "" ? var.e2e_test_buildspec : <<-BUILDSPEC
+version: 0.2
+
+# Default E2E Test Buildspec
+# This buildspec clones your QA test repository and runs tests
+# Customize by providing your own buildspec via e2e_test_buildspec variable
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 18
+    commands:
+      - echo "Installing test dependencies..."
+      - |
+        if [ -f "package.json" ]; then
+          npm ci
+        elif [ -f "requirements.txt" ]; then
+          pip install -r requirements.txt
+        fi
+
+  pre_build:
+    commands:
+      - echo "=== E2E Test Pre-Build Phase ==="
+      - echo "Environment: $ENVIRONMENT"
+      - echo "Service: $SERVICE_NAME"
+      - echo "Test started at $(date)"
+
+  build:
+    commands:
+      - echo "=== Running E2E Tests ==="
+      - |
+        if [ -f "package.json" ]; then
+          npm test
+        elif [ -f "pytest.ini" ] || [ -f "requirements.txt" ]; then
+          pytest
+        else
+          echo "No test framework detected. Add your test command here."
+          exit 1
+        fi
+
+  post_build:
+    commands:
+      - echo "=== E2E Tests Completed ==="
+      - echo "Test finished at $(date)"
+
+artifacts:
+  files:
+    - '**/*'
+  name: e2e-test-results
+BUILDSPEC
+  }
+
+  logs_config {
+    cloudwatch_logs {
+      group_name  = aws_cloudwatch_log_group.e2e_tests[0].name
+      stream_name = "e2e-tests"
+      status      = "ENABLED"
+    }
+  }
+
+  encryption_key = var.kms_key_arn
+
+  tags = merge(local.common_tags, {
+    Name    = "${local.project_name}-e2e-tests"
+    Purpose = "E2ETesting"
   })
 }
 
@@ -518,10 +653,56 @@ resource "aws_codepipeline" "this" {
     }
   }
 
-  tags = merge(local.common_tags, {
+  # E2E Test Stage - Run tests from separate QA repo after deployment
+  dynamic "stage" {
+    for_each = var.enable_e2e_tests && var.e2e_test_repository_id != "" ? [1] : []
+    
+    content {
+      name = "E2E-Tests"
+
+      # Clone QA test repository
+      action {
+        name             = "CloneTestRepo"
+        category         = "Source"
+        owner            = "AWS"
+        provider         = "CodeStarSourceConnection"
+        output_artifacts = ["e2e_test_source"]
+        version          = "1"
+
+        configuration = {
+          ConnectionArn        = var.codeconnections_arn
+          FullRepositoryId     = var.e2e_test_repository_id
+          BranchName           = var.e2e_test_branch
+          OutputArtifactFormat = "CODE_ZIP"
+        }
+      }
+
+      # Run E2E tests
+      action {
+        name             = "RunE2ETests"
+        category         = "Build"
+        owner            = "AWS"
+        provider         = "CodeBuild"
+        input_artifacts  = ["e2e_test_source"]
+        output_artifacts = ["e2e_test_results"]
+        version          = "1"
+        run_order        = 2
+
+        configuration = {
+          ProjectName = aws_codebuild_project.e2e_tests[0].name
+        }
+      }
+    }
+  }
+
+  tags = merge(local.pipeline_safe_tags, {
+    Module        = "cicd"
+    ServiceName   = var.service_name
     Name          = "${local.name_prefix}-pipeline"
     PipelineType  = var.pipeline_type
-    BranchPattern = var.branch_pattern
+    # BranchPattern removed - contains asterisk which CodePipeline doesn't allow
+    Environment   = var.environment
+    ManagedBy     = "Terraform"
   })
 }
 
@@ -632,9 +813,13 @@ resource "aws_codepipeline" "production" {
     }
   }
 
-  tags = merge(local.common_tags, {
+  tags = merge(local.pipeline_safe_tags, {
+    Module                 = "cicd"
+    ServiceName            = var.service_name
     Name                   = "${local.name_prefix}-pipeline"
     PipelineType           = "production"
+    Environment            = var.environment
+    ManagedBy              = "Terraform"
     BranchPattern          = var.branch_pattern
     RequiresManualApproval = "true"
   })
@@ -746,9 +931,10 @@ resource "aws_codestarnotifications_notification_rule" "pipeline" {
     address = var.notification_sns_topic_arn != "" ? var.notification_sns_topic_arn : aws_sns_topic.pipeline_notifications[0].arn
   }
 
-  tags = merge(local.common_tags, {
-    Name    = "${local.name_prefix}-pipeline-notifications"
-    Purpose = "PipelineNotificationRule"
+  tags = merge(local.pipeline_safe_tags, {
+    Module      = "cicd"
+    ServiceName = var.service_name
+    Name        = "${local.name_prefix}-pipeline-notifications"
   })
 }
 
@@ -776,8 +962,9 @@ resource "aws_codestarnotifications_notification_rule" "production_pipeline" {
     address = var.notification_sns_topic_arn != "" ? var.notification_sns_topic_arn : (length(aws_sns_topic.approval_notifications) > 0 ? aws_sns_topic.approval_notifications[0].arn : "")
   }
 
-  tags = merge(local.common_tags, {
-    Name    = "${local.name_prefix}-pipeline-notifications"
-    Purpose = "ProductionPipelineNotificationRule"
+  tags = merge(local.pipeline_safe_tags, {
+    Module      = "cicd"
+    ServiceName = var.service_name
+    Name        = "${local.name_prefix}-pipeline-notifications"
   })
 }
