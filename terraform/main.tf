@@ -187,7 +187,8 @@ module "alb" {
   enable_deletion_protection = local.enable_deletion_protection
 
   # Access logging with encryption
-  enable_access_logs = true
+  # Temporarily disabled to troubleshoot bucket permission issues
+  enable_access_logs = false
   kms_key_s3_arn     = module.security.kms_key_s3_arn
 
   # TLS configuration - enforce TLS 1.2 minimum

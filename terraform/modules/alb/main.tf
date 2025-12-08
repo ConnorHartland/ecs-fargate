@@ -128,6 +128,24 @@ resource "aws_s3_bucket_policy" "access_logs" {
     Version = "2012-10-17"
     Statement = [
       {
+        Sid    = "AWSLogDeliveryWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "logging.s3.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.access_logs[0].arn}/*"
+      },
+      {
+        Sid    = "AWSLogDeliveryAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "logging.s3.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.access_logs[0].arn
+      },
+      {
         Sid    = "AllowELBAccessLogs"
         Effect = "Allow"
         Principal = {
@@ -135,51 +153,6 @@ resource "aws_s3_bucket_policy" "access_logs" {
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.access_logs[0].arn}/*"
-      },
-      {
-        Sid    = "AllowELBServiceAccountAclCheck"
-        Effect = "Allow"
-        Principal = {
-          AWS = data.aws_elb_service_account.main.arn
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.access_logs[0].arn
-      },
-      {
-        Sid    = "AllowALBServiceAccount"
-        Effect = "Allow"
-        Principal = {
-          Service = "elasticloadbalancing.amazonaws.com"
-        }
-        Action = "s3:PutObject"
-        Resource = "${aws_s3_bucket.access_logs[0].arn}/*"
-      },
-      {
-        Sid    = "AllowALBServiceAccountAclCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "elasticloadbalancing.amazonaws.com"
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.access_logs[0].arn
-      },
-      {
-        Sid    = "AllowLogDeliveryService"
-        Effect = "Allow"
-        Principal = {
-          Service = "delivery.logs.amazonaws.com"
-        }
-        Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.access_logs[0].arn}/*"
-      },
-      {
-        Sid    = "AllowLogDeliveryServiceAclCheck"
-        Effect = "Allow"
-        Principal = {
-          Service = "delivery.logs.amazonaws.com"
-        }
-        Action   = "s3:GetBucketAcl"
-        Resource = aws_s3_bucket.access_logs[0].arn
       }
     ]
   })
