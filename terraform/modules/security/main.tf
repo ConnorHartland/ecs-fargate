@@ -881,7 +881,7 @@ resource "aws_iam_policy" "production_access" {
   tags = merge(local.common_tags, {
     Name       = "${local.name_prefix}-production-access"
     Purpose    = "ProductionMFAEnforcement"
-    Compliance = "NIST-IA-2,SOC2-CC6.1"
+    Compliance = "NIST-IA-2+SOC2-CC6.1"
   })
 }
 
@@ -957,7 +957,7 @@ resource "aws_iam_policy" "enforce_mfa" {
   tags = merge(local.common_tags, {
     Name       = "${local.name_prefix}-enforce-mfa"
     Purpose    = "MFAEnforcement"
-    Compliance = "NIST-IA-2,SOC2-CC6.1"
+    Compliance = "NIST-IA-2+SOC2-CC6.1"
   })
 }
 
@@ -1041,7 +1041,7 @@ resource "aws_iam_policy" "production_readonly" {
   tags = merge(local.common_tags, {
     Name       = "${local.name_prefix}-production-readonly"
     Purpose    = "ProductionReadOnlyAccess"
-    Compliance = "NIST-AC-3,SOC2-CC6.1"
+    Compliance = "NIST-AC-3+SOC2-CC6.1"
   })
 }
 
@@ -1160,7 +1160,7 @@ resource "aws_iam_policy" "production_operator" {
   tags = merge(local.common_tags, {
     Name       = "${local.name_prefix}-production-operator"
     Purpose    = "ProductionOperatorAccess"
-    Compliance = "NIST-AC-3,SOC2-CC6.1"
+    Compliance = "NIST-AC-3+SOC2-CC6.1"
   })
 }
 
@@ -1313,7 +1313,7 @@ resource "aws_iam_policy" "production_admin" {
   tags = merge(local.common_tags, {
     Name       = "${local.name_prefix}-production-admin"
     Purpose    = "ProductionAdminAccess"
-    Compliance = "NIST-AC-3,SOC2-CC6.1"
+    Compliance = "NIST-AC-3+SOC2-CC6.1"
   })
 }
 
@@ -1399,7 +1399,7 @@ resource "aws_iam_policy" "production_protection" {
   tags = merge(local.common_tags, {
     Name       = "${local.name_prefix}-production-protection"
     Purpose    = "ProductionResourceProtection"
-    Compliance = "NIST-AC-3,SOC2-CC6.1"
+    Compliance = "NIST-AC-3+SOC2-CC6.1"
   })
 }
 
@@ -1517,6 +1517,6 @@ resource "aws_iam_policy" "permissions_boundary" {
   tags = merge(local.common_tags, {
     Name       = "${local.name_prefix}-permissions-boundary"
     Purpose    = "PermissionsBoundary"
-    Compliance = "NIST-AC-2,SOC2-CC6.1"
+    Compliance = "NIST-AC-2+SOC2-CC6.1"
   })
 }

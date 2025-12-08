@@ -9,10 +9,14 @@ locals {
   # S3 bucket name for Config delivery
   config_bucket_name = var.config_bucket_name != null ? var.config_bucket_name : "${local.name_prefix}-config-${var.aws_account_id}"
 
+  # S3 path prefix for Config delivery - single source of truth
+  config_prefix       = "config/${var.aws_account_id}"
+  config_path_pattern = "${aws_s3_bucket.config.arn}/${local.config_prefix}/*"
+
   common_tags = merge(var.tags, {
     Module       = "config"
     IsProduction = tostring(local.is_production)
-    Compliance   = "NIST-CM-2,SOC2-CC8.1"
+    Compliance   = "NIST-CM-2+SOC2-CC8.1"
   })
 }
 
@@ -105,7 +109,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "config" {
     }
 
     noncurrent_version_expiration {
-      noncurrent_days = var.log_retention_days
+      noncurrent_days = var.log_retention_days > 30 ? var.log_retention_days : 60
     }
   }
 }
@@ -152,7 +156,7 @@ resource "aws_s3_bucket_policy" "config" {
           Service = "config.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.config.arn}/AWSLogs/${var.aws_account_id}/Config/*"
+        Resource = local.config_path_pattern
         Condition = {
           StringEquals = {
             "s3:x-amz-acl"      = "bucket-owner-full-control"
@@ -240,7 +244,7 @@ resource "aws_iam_role_policy" "config_s3" {
           "s3:PutObject",
           "s3:PutObjectAcl"
         ]
-        Resource = "${aws_s3_bucket.config.arn}/AWSLogs/${var.aws_account_id}/Config/*"
+        Resource = local.config_path_pattern
         Condition = {
           StringLike = {
             "s3:x-amz-acl" = "bucket-owner-full-control"
@@ -349,10 +353,11 @@ resource "aws_config_configuration_recorder" "main" {
 # =============================================================================
 
 resource "aws_config_delivery_channel" "main" {
-  name           = "${local.name_prefix}-delivery"
-  s3_bucket_name = aws_s3_bucket.config.id
-  s3_key_prefix  = "AWSLogs/${var.aws_account_id}/Config"
-  sns_topic_arn  = local.sns_topic_arn
+  name            = "${local.name_prefix}-delivery"
+  s3_bucket_name  = aws_s3_bucket.config.id
+  s3_key_prefix   = local.config_prefix
+  s3_kms_key_arn  = var.kms_key_arn
+  sns_topic_arn   = local.sns_topic_arn
 
   snapshot_delivery_properties {
     delivery_frequency = local.is_production ? "One_Hour" : "Six_Hours"

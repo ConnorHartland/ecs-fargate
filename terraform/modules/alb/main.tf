@@ -10,6 +10,11 @@ locals {
   # Create bucket name if not provided
   access_logs_bucket = var.access_logs_bucket_name != "" ? var.access_logs_bucket_name : "${local.name_prefix}-alb-logs"
 
+  # Standardize ALB logs path for consistency across bucket policy and ALB configuration
+  # Ensures trailing slash is handled correctly
+  alb_logs_prefix = var.access_logs_prefix != "" ? var.access_logs_prefix : ""
+  alb_logs_path_pattern = var.access_logs_prefix != "" ? "${var.access_logs_prefix}/*" : "*"
+
   common_tags = merge(var.tags, {
     Module = "alb"
   })
@@ -77,6 +82,16 @@ resource "aws_s3_bucket_public_access_block" "access_logs" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_ownership_controls" "access_logs" {
+  count = var.enable_access_logs ? 1 : 0
+
+  bucket = aws_s3_bucket.access_logs[0].id
+
+  rule {
+    object_ownership = "BucketOwnerPreferred"
+  }
+}
+
 resource "aws_s3_bucket_lifecycle_configuration" "access_logs" {
   count = var.enable_access_logs ? 1 : 0
 
@@ -88,10 +103,6 @@ resource "aws_s3_bucket_lifecycle_configuration" "access_logs" {
 
     filter {}
 
-    expiration {
-      days = var.environment == "prod" ? 365 : 90
-    }
-
     transition {
       days          = 30
       storage_class = "STANDARD_IA"
@@ -100,6 +111,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "access_logs" {
     transition {
       days          = 90
       storage_class = "GLACIER"
+    }
+
+    expiration {
+      days = var.environment == "prod" ? 365 : 180
     }
   }
 }
@@ -119,7 +134,34 @@ resource "aws_s3_bucket_policy" "access_logs" {
           AWS = data.aws_elb_service_account.main.arn
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.access_logs[0].arn}/${var.access_logs_prefix}/*"
+        Resource = "${aws_s3_bucket.access_logs[0].arn}/*"
+      },
+      {
+        Sid    = "AllowELBServiceAccountAclCheck"
+        Effect = "Allow"
+        Principal = {
+          AWS = data.aws_elb_service_account.main.arn
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.access_logs[0].arn
+      },
+      {
+        Sid    = "AllowALBServiceAccount"
+        Effect = "Allow"
+        Principal = {
+          Service = "elasticloadbalancing.amazonaws.com"
+        }
+        Action = "s3:PutObject"
+        Resource = "${aws_s3_bucket.access_logs[0].arn}/*"
+      },
+      {
+        Sid    = "AllowALBServiceAccountAclCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "elasticloadbalancing.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.access_logs[0].arn
       },
       {
         Sid    = "AllowLogDeliveryService"
@@ -128,12 +170,7 @@ resource "aws_s3_bucket_policy" "access_logs" {
           Service = "delivery.logs.amazonaws.com"
         }
         Action   = "s3:PutObject"
-        Resource = "${aws_s3_bucket.access_logs[0].arn}/${var.access_logs_prefix}/*"
-        Condition = {
-          StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
-          }
-        }
+        Resource = "${aws_s3_bucket.access_logs[0].arn}/*"
       },
       {
         Sid    = "AllowLogDeliveryServiceAclCheck"
@@ -147,7 +184,10 @@ resource "aws_s3_bucket_policy" "access_logs" {
     ]
   })
 
-  depends_on = [aws_s3_bucket_public_access_block.access_logs]
+  depends_on = [
+    aws_s3_bucket_public_access_block.access_logs,
+    aws_s3_bucket_ownership_controls.access_logs
+  ]
 }
 
 # =============================================================================
@@ -222,7 +262,7 @@ resource "aws_lb" "main" {
     for_each = var.enable_access_logs ? [1] : []
     content {
       bucket  = aws_s3_bucket.access_logs[0].id
-      prefix  = var.access_logs_prefix
+      prefix  = local.alb_logs_prefix
       enabled = true
     }
   }
@@ -231,7 +271,10 @@ resource "aws_lb" "main" {
     Name = "${local.name_prefix}-alb"
   })
 
-  depends_on = [aws_s3_bucket_policy.access_logs]
+  depends_on = [
+    aws_s3_bucket_policy.access_logs,
+    aws_s3_bucket_public_access_block.access_logs
+  ]
 }
 
 

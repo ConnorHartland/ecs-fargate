@@ -12,7 +12,7 @@ locals {
   common_tags = merge(var.tags, {
     Module       = "cloudtrail"
     IsProduction = tostring(local.is_production)
-    Compliance   = "NIST-AU-2,NIST-AU-9,SOC2-CC7.2"
+    Compliance   = "NIST-AU-2+NIST-AU-9+SOC2-CC7.2"
   })
 }
 
@@ -100,13 +100,15 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
     id     = "noncurrent-version-retention"
     status = "Enabled"
 
+    filter {}
+
     noncurrent_version_transition {
       noncurrent_days = 30
       storage_class   = "GLACIER"
     }
 
     noncurrent_version_expiration {
-      noncurrent_days = var.log_retention_days
+      noncurrent_days = var.log_retention_days > 30 ? var.log_retention_days : 60
     }
   }
 }
