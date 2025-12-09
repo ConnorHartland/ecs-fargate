@@ -896,7 +896,7 @@ resource "aws_sns_topic" "pipeline_notifications" {
   })
 }
 
-# SNS Topic Policy to allow CodePipeline to publish notifications
+# SNS Topic Policy to allow CodeStar Notifications to publish notifications
 resource "aws_sns_topic_policy" "pipeline_notifications" {
   count = var.enable_pipeline && var.enable_notifications && var.notification_sns_topic_arn == "" ? 1 : 0
 
@@ -911,7 +911,7 @@ resource "aws_sns_topic_policy" "pipeline_notifications" {
         Principal = {
           Service = "codestar-notifications.amazonaws.com"
         }
-        Action   = "SNS:Publish"
+        Action   = ["SNS:Publish", "SNS:Subscribe"]
         Resource = aws_sns_topic.pipeline_notifications[0].arn
         Condition = {
           StringEquals = {
@@ -941,7 +941,7 @@ resource "aws_sns_topic" "approval_notifications" {
   })
 }
 
-# SNS Topic Policy to allow CodePipeline to publish approval notifications
+# SNS Topic Policy to allow CodePipeline and CodeStar Notifications to publish approval notifications
 resource "aws_sns_topic_policy" "approval_notifications" {
   count = var.enable_pipeline && var.pipeline_type == "production" && var.approval_sns_topic_arn == "" ? 1 : 0
 
@@ -957,6 +957,20 @@ resource "aws_sns_topic_policy" "approval_notifications" {
           Service = "codepipeline.amazonaws.com"
         }
         Action   = "SNS:Publish"
+        Resource = aws_sns_topic.approval_notifications[0].arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.aws_account_id
+          }
+        }
+      },
+      {
+        Sid    = "AllowCodeStarNotifications"
+        Effect = "Allow"
+        Principal = {
+          Service = "codestar-notifications.amazonaws.com"
+        }
+        Action   = ["SNS:Publish", "SNS:Subscribe"]
         Resource = aws_sns_topic.approval_notifications[0].arn
         Condition = {
           StringEquals = {

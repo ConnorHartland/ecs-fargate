@@ -1,17 +1,16 @@
 #!/bin/bash
 # Script to create Terraform backend infrastructure in us-east-1
-# This creates the exact bucket name referenced in backend.hcl files
+# This creates the S3 bucket for state storage (no DynamoDB locking)
 
 set -e
 
 BUCKET_NAME="con-ecs-fargate-terraform-state"
-TABLE_NAME="con-ecs-fargate-terraform-state-lock"
 REGION="us-east-1"
 
 echo "=== Creating Terraform Backend in us-east-1 ==="
 echo "Bucket: ${BUCKET_NAME}"
-echo "Table: ${TABLE_NAME}"
 echo "Region: ${REGION}"
+echo "Note: DynamoDB locking disabled to avoid state lock issues"
 echo ""
 
 # Create S3 bucket in us-east-1
@@ -57,20 +56,12 @@ aws s3api put-public-access-block \
   }' \
   && echo "✓ Public access blocked"
 
-# Create DynamoDB table
-echo "Creating DynamoDB table..."
-aws dynamodb create-table \
-  --table-name "${TABLE_NAME}" \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST \
-  --region "${REGION}" \
-  --tags Key=Project,Value=ecs-fargate Key=ManagedBy,Value=Terraform \
-  2>/dev/null && echo "✓ DynamoDB table created" || echo "⚠ Table already exists or creation failed"
-
 echo ""
 echo "=== Backend Setup Complete ==="
 echo ""
 echo "You can now initialize Terraform with:"
 echo "  cd terraform"
 echo "  terraform init -backend-config=environments/develop/backend.hcl"
+echo ""
+echo "Note: DynamoDB state locking is disabled. This is fine for solo development"
+echo "but be careful if multiple people are running Terraform simultaneously."

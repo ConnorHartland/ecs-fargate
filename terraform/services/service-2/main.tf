@@ -1,12 +1,12 @@
-# Service 2 Configuration
-# Public-facing Python service
+# Service 1 Configuration
+# Public-facing Node.js service
 
 terraform {
   required_version = ">= 1.0"
 
   backend "s3" {
     # Backend configuration provided via -backend-config flag
-    # See: ../../environments/{environment}/backend.hcl
+    # See: backend-develop.hcl
   }
 }
 
@@ -14,115 +14,148 @@ terraform {
 # Service Module Invocation
 # =============================================================================
 
-module "service_2" {
+module "service_1" {
   source = "../../modules/service"
 
   # Service Identity
   service_name   = "service-2"
-  runtime        = "python"
-  repository_url = "myorg/service-2"
+  runtime        = "nodejs"
+  repository_url = "connor-cicd/service-2"
   service_type   = "public"
 
   # Container Configuration
-  container_port = 8000
+  container_port = 3000
   cpu            = 512  # 0.5 vCPU
   memory         = 1024 # 1 GB
 
   # Scaling Configuration
-  desired_count   = 2
+  desired_count   = 1
   autoscaling_min = 1
   autoscaling_max = 5
 
   # Health Check Configuration
-  health_check_path     = "/health"
+  health_check_path     = "/service2/health"
   health_check_interval = 30
   health_check_timeout  = 5
 
   # ALB Routing Configuration
-  path_patterns          = ["/service2/*"]
-  listener_rule_priority = 102
+  path_patterns          = ["/service2/*"]  # Route all traffic to this service
+  listener_rule_priority = 99
   deregistration_delay   = 30
 
   # Environment Configuration
-  environment = var.environment
+  environment = local.environment
 
   # Environment Variables
   environment_variables = {
-    PYTHON_ENV   = var.environment == "prod" ? "production" : "development"
-    LOG_LEVEL    = var.environment == "prod" ? "info" : "debug"
-    PORT         = "8000"
+    NODE_ENV     = local.environment == "prod" ? "production" : "development"
+    LOG_LEVEL    = local.environment == "prod" ? "info" : "debug"
+    PORT         = "3000"
     SERVICE_NAME = "service-2"
 
     # Kafka Configuration
-    KAFKA_BROKERS   = join(",", var.kafka_brokers)
-    KAFKA_CLIENT_ID = "service-2-${var.environment}"
-    KAFKA_GROUP_ID  = "service-2-consumer-${var.environment}"
+    KAFKA_BROKERS   = join(",", local.kafka_brokers)
+    KAFKA_CLIENT_ID = "service-2-${local.environment}"
+    KAFKA_GROUP_ID  = "service-2-consumer-${local.environment}"
   }
 
   # Secrets Configuration
-  secrets_arns = [
-    {
-      name       = "DATABASE_URL"
-      value_from = "${var.secrets_arn_prefix}/service-2/database-url"
-    },
-    {
-      name       = "API_KEY"
-      value_from = "${var.secrets_arn_prefix}/service-2/api-key"
-    }
-  ]
+  # Create secrets in AWS Secrets Manager first, then uncomment:
+  # secrets_arns = [
+  #   {
+  #     name       = "DATABASE_URL"
+  #     value_from = "${local.secrets_arn_prefix}/service-1/database-url"
+  #   },
+  #   {
+  #     name       = "API_KEY"
+  #     value_from = "${local.secrets_arn_prefix}/service-1/api-key"
+  #   }
+  # ]
+  secrets_arns = []
 
   # Kafka Configuration
-  kafka_brokers           = var.kafka_brokers
-  kafka_security_group_id = var.kafka_security_group_id
+  kafka_brokers           = local.kafka_brokers
+  kafka_security_group_id = local.kafka_security_group_id
 
   # Infrastructure Dependencies
-  project_name   = var.project_name
-  aws_account_id = var.aws_account_id
-  aws_region     = var.aws_region
+  project_name   = local.project_name
+  aws_account_id = local.aws_account_id
+  aws_region     = local.aws_region
 
   # ECS Cluster
-  cluster_arn  = var.cluster_arn
-  cluster_name = var.cluster_name
+  cluster_arn  = local.cluster_arn
+  cluster_name = local.cluster_name
 
   # Network Configuration
-  vpc_id             = var.vpc_id
-  private_subnet_ids = var.private_subnet_ids
-  public_subnet_ids  = var.public_subnet_ids
+  vpc_id             = local.vpc_id
+  private_subnet_ids = local.private_subnet_ids
+  public_subnet_ids  = local.public_subnet_ids
 
   # ALB Configuration
-  alb_listener_arn      = var.alb_listener_arn
-  alb_security_group_id = var.alb_security_group_id
+  alb_listener_arn      = local.alb_listener_arn
+  alb_security_group_id = local.alb_security_group_id
 
   # IAM Roles
-  task_execution_role_arn = var.task_execution_role_arn
-  codebuild_role_arn      = var.codebuild_role_arn
-  codepipeline_role_arn   = var.codepipeline_role_arn
+  task_execution_role_arn = local.task_execution_role_arn
+  codebuild_role_arn      = local.codebuild_role_arn
+  codepipeline_role_arn   = local.codepipeline_role_arn
 
   # KMS Keys
-  kms_key_arn            = var.kms_key_arn
-  kms_key_ecr_arn        = var.kms_key_ecr_arn
-  kms_key_cloudwatch_arn = var.kms_key_cloudwatch_arn
-  kms_key_secrets_arn    = var.kms_key_secrets_arn
-  kms_key_s3_arn         = var.kms_key_s3_arn
+  kms_key_arn            = local.kms_key_arn
+  kms_key_ecr_arn        = local.kms_key_ecr_arn
+  kms_key_cloudwatch_arn = local.kms_key_cloudwatch_arn
+  kms_key_secrets_arn    = local.kms_key_secrets_arn
+  kms_key_s3_arn         = local.kms_key_s3_arn
 
   # CI/CD Configuration
-  codeconnections_arn = var.codeconnections_arn
-  branch_pattern      = var.environment == "prod" ? "prod/*" : var.environment == "test" || var.environment == "qa" ? "release/*" : "feature/*"
-  pipeline_type       = var.environment == "prod" ? "production" : var.environment == "test" || var.environment == "qa" ? "release" : "feature"
-  enable_pipeline     = true
+  codeconnections_arn = local.codeconnections_arn
+  branch_pattern      = local.environment == "prod" ? "main" : local.environment == "test" || local.environment == "qa" ? "release" : "develop"
+  pipeline_type       = local.environment == "prod" ? "production" : "release"
+  enable_pipeline     = true  # CI/CD pipeline enabled
+  buildspec_path      = "buildspec.yml"  # Use inline default buildspec from CICD module
 
-  notification_sns_topic_arn = var.notification_sns_topic_arn
-  approval_sns_topic_arn     = var.approval_sns_topic_arn
+  # Pipeline Notification Configuration
+  # Enable SNS notifications for pipeline events (started, succeeded, failed, etc.)
+  # When enabled, the CICD module will create an SNS topic and notification rule
+  # Team members can subscribe their email addresses to receive notifications
+  # See NOTIFICATIONS.md for subscription instructions
+  enable_notifications = true
+
+  # Optional: Use existing SNS topics instead of creating new ones
+  # Leave empty to auto-create topics per environment
+  notification_sns_topic_arn = local.notification_sns_topic_arn
+  approval_sns_topic_arn     = local.approval_sns_topic_arn
+
+  # Optional: Customize which pipeline events trigger notifications
+  # Default events include: started, succeeded, failed, canceled, superseded
+  # Production pipelines automatically include approval events (approval-needed, approval-succeeded, approval-failed)
+  # Uncomment and modify to customize:
+  # notification_events = [
+  #   "codepipeline-pipeline-pipeline-execution-started",
+  #   "codepipeline-pipeline-pipeline-execution-succeeded",
+  #   "codepipeline-pipeline-pipeline-execution-failed",
+  #   "codepipeline-pipeline-pipeline-execution-canceled"
+  # ]
+
+  # E2E Testing Configuration
+  enable_e2e_tests       = false
+  e2e_test_repository_id = "connor-cicd/qa-tests"  # Your QA test repository
+  e2e_test_branch        = "main"  # Or match environment: develop/test/qa/main
+  e2e_test_environment_variables = {
+    API_URL = "https://your-alb-url.com"  # Service endpoint to test
+    # Note: ENVIRONMENT and SERVICE_NAME are automatically set by the module
+  }
+  e2e_test_timeout_minutes = 30
 
   # Logging Configuration
-  log_retention_days = var.environment == "prod" ? 90 : 30
+  log_retention_days = local.environment == "prod" ? 90 : 30
 
   # Tags
   tags = merge(
-    var.tags,
+    local.tags,
     {
       ServiceType = "public"
-      Runtime     = "python"
+      Runtime     = "nodejs"
       Component   = "service-2"
     }
   )
@@ -134,20 +167,20 @@ module "service_2" {
 
 output "service_arn" {
   description = "ARN of the ECS service"
-  value       = module.service_2.service_arn
+  value       = module.service_1.service_arn
 }
 
 output "service_name" {
   description = "Name of the ECS service"
-  value       = module.service_2.service_name
+  value       = module.service_1.service_name
 }
 
 output "ecr_repository_url" {
   description = "URL of the ECR repository"
-  value       = module.service_2.ecr_repository_url
+  value       = module.service_1.ecr_repository_url
 }
 
 output "pipeline_name" {
   description = "Name of the CodePipeline"
-  value       = module.service_2.pipeline_name
+  value       = module.service_1.pipeline_name
 }

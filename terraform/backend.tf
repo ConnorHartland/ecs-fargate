@@ -1,5 +1,5 @@
 # Backend configuration for Terraform state management
-# This file defines the S3 backend with encryption and DynamoDB state locking
+# This file defines the S3 backend with encryption (no DynamoDB locking)
 #
 # Usage: Initialize with environment-specific backend config:
 #   terraform init -backend-config=environments/develop/backend.hcl
@@ -16,14 +16,12 @@
 #
 # 1. S3 Bucket for state storage:
 #    - Bucket name: ${project_name}-terraform-state-${aws_account_id}
-#    - Versioning: Enabled
+#    - Versioning: Enabled (recommended for state recovery)
 #    - Encryption: AES256 or KMS
 #    - Public access: Blocked
 #
-# 2. DynamoDB Table for state locking:
-#    - Table name: ${project_name}-terraform-state-lock
-#    - Partition key: LockID (String)
-#    - Billing mode: PAY_PER_REQUEST
+# Note: DynamoDB state locking is disabled to avoid lock conflicts.
+# This is suitable for solo development but be careful with concurrent operations.
 #
 # =============================================================================
 # Bootstrap Script
@@ -36,7 +34,7 @@
 #   --bucket ${project_name}-terraform-state-${aws_account_id} \
 #   --region us-east-1
 #
-# # Enable versioning
+# # Enable versioning (recommended for state recovery)
 # aws s3api put-bucket-versioning \
 #   --bucket ${project_name}-terraform-state-${aws_account_id} \
 #   --versioning-configuration Status=Enabled
@@ -62,10 +60,5 @@
 #     "RestrictPublicBuckets": true
 #   }'
 #
-# # Create DynamoDB table for state locking
-# aws dynamodb create-table \
-#   --table-name ${project_name}-terraform-state-lock \
-#   --attribute-definitions AttributeName=LockID,AttributeType=S \
-#   --key-schema AttributeName=LockID,KeyType=HASH \
-#   --billing-mode PAY_PER_REQUEST \
-#   --region us-east-1
+# Or use the bootstrap script:
+#   ./scripts/bootstrap-backend.sh us-east-1

@@ -191,11 +191,10 @@ variable "notification_events" {
     "codepipeline-pipeline-pipeline-execution-started",
     "codepipeline-pipeline-pipeline-execution-succeeded",
     "codepipeline-pipeline-pipeline-execution-failed",
-    "codepipeline-pipeline-stage-execution-started",
-    "codepipeline-pipeline-stage-execution-succeeded",
-    "codepipeline-pipeline-stage-execution-failed",
-    "codepipeline-pipeline-action-execution-failed"
+    "codepipeline-pipeline-pipeline-execution-canceled",
+    "codepipeline-pipeline-pipeline-execution-superseded"
   ]
+  # Note: Event types 'stopped' and 'resumed' are not valid for CodePipeline notification rules
 }
 
 # =============================================================================

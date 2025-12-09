@@ -133,8 +133,28 @@ module "nodejs_public_service" {
   pipeline_type       = var.environment == "prod" ? "production" : var.environment == "test" || var.environment == "qa" ? "release" : "feature"
   enable_pipeline     = true
 
+  # Pipeline Notification Configuration
+  # Enable SNS notifications for pipeline events (started, succeeded, failed, etc.)
+  # When enabled, the CICD module will create an SNS topic and notification rule
+  # Team members can subscribe their email addresses to receive notifications
+  # See NOTIFICATIONS.md for subscription instructions
+  enable_notifications = true
+
+  # Optional: Use existing SNS topics instead of creating new ones
+  # Leave empty to auto-create topics per environment
   notification_sns_topic_arn = var.notification_sns_topic_arn
   approval_sns_topic_arn     = var.approval_sns_topic_arn
+
+  # Optional: Customize which pipeline events trigger notifications
+  # Default events include: started, succeeded, failed, canceled, superseded
+  # Production pipelines automatically include approval events (approval-needed, approval-succeeded, approval-failed)
+  # Uncomment and modify to customize:
+  # notification_events = [
+  #   "codepipeline-pipeline-pipeline-execution-started",
+  #   "codepipeline-pipeline-pipeline-execution-succeeded",
+  #   "codepipeline-pipeline-pipeline-execution-failed",
+  #   "codepipeline-pipeline-pipeline-execution-canceled"
+  # ]
 
   # Logging Configuration
   log_retention_days = var.environment == "prod" ? 90 : 30

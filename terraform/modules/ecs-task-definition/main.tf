@@ -227,6 +227,14 @@ resource "aws_ecs_task_definition" "main" {
     Name = local.family_name
   })
 
+  # Lifecycle: Ignore changes to container image
+  # The CI/CD pipeline updates the image, so Terraform shouldn't overwrite it
+  lifecycle {
+    ignore_changes = [
+      container_definitions
+    ]
+  }
+
   # Ensure log group exists before task definition
   depends_on = [aws_cloudwatch_log_group.container]
 }

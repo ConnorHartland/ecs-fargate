@@ -88,6 +88,59 @@ resource "aws_sns_topic" "pipeline_notifications" {
   })
 }
 
+# SNS Topic Policy to allow CodeStar Notifications to publish
+resource "aws_sns_topic_policy" "pipeline_notifications" {
+  count = var.enable_sns_notifications ? 1 : 0
+
+  arn = aws_sns_topic.pipeline_notifications[0].arn
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowAccountOwner"
+        Effect = "Allow"
+        Principal = {
+          AWS = "*"
+        }
+        Action = [
+          "SNS:GetTopicAttributes",
+          "SNS:SetTopicAttributes",
+          "SNS:AddPermission",
+          "SNS:RemovePermission",
+          "SNS:DeleteTopic",
+          "SNS:Subscribe",
+          "SNS:ListSubscriptionsByTopic",
+          "SNS:Publish"
+        ]
+        Resource = aws_sns_topic.pipeline_notifications[0].arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceOwner" = var.aws_account_id
+          }
+        }
+      },
+      {
+        Sid    = "AllowCodeStarNotifications"
+        Effect = "Allow"
+        Principal = {
+          Service = "codestar-notifications.amazonaws.com"
+        }
+        Action = [
+          "SNS:Publish",
+          "SNS:Subscribe"
+        ]
+        Resource = aws_sns_topic.pipeline_notifications[0].arn
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.aws_account_id
+          }
+        }
+      }
+    ]
+  })
+}
+
 
 # =============================================================================
 # SNS Topic Subscriptions (Email)

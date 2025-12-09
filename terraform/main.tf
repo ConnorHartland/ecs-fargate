@@ -138,6 +138,7 @@ module "monitoring" {
   ecs_cluster_name = module.ecs_cluster.cluster_name
   ecs_cluster_arn  = module.ecs_cluster.cluster_arn
   kms_key_arn      = module.security.kms_key_cloudwatch_arn
+  aws_account_id   = data.aws_caller_identity.current.account_id
 
   # Environment-specific log retention
   # Production: 90 days for compliance (NIST AU-9, SOC-2 CC7.2)

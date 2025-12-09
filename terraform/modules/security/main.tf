@@ -211,6 +211,24 @@ resource "aws_kms_key" "cloudwatch" {
             "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${var.aws_region}:${var.aws_account_id}:*"
           }
         }
+      },
+      {
+        Sid    = "AllowCodeStarNotifications"
+        Effect = "Allow"
+        Principal = {
+          Service = "codestar-notifications.amazonaws.com"
+        }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService"      = "sns.${var.aws_region}.amazonaws.com"
+            "aws:SourceAccount" = var.aws_account_id
+          }
+        }
       }
     ]
   })

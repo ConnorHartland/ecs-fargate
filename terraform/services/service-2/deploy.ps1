@@ -1,10 +1,10 @@
-# PowerShell script to deploy service-1
-# Run this from the service-1 directory
+# PowerShell script to deploy service-2
+# Run this from the service-2 directory
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "==========================================" -ForegroundColor Cyan
-Write-Host "Deploying service-1 to develop environment" -ForegroundColor Cyan
+Write-Host "Deploying service-2 to develop environment" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -53,12 +53,13 @@ if ($ECR_REPO) {
     Write-Host "Next steps:" -ForegroundColor Yellow
     Write-Host "1. Build and push your Docker image:" -ForegroundColor White
     Write-Host "   aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_REPO" -ForegroundColor Gray
-    Write-Host "   docker build -t service-1 ." -ForegroundColor Gray
-    Write-Host "   docker tag service-1:latest ${ECR_REPO}:latest" -ForegroundColor Gray
+    Write-Host "   docker build -t service-2 ." -ForegroundColor Gray
+    Write-Host "   docker tag service-2:latest ${ECR_REPO}:latest" -ForegroundColor Gray
     Write-Host "   docker push ${ECR_REPO}:latest" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "2. Trigger the pipeline:" -ForegroundColor White
-    Write-Host "   aws codepipeline start-pipeline-execution --name service-1-develop" -ForegroundColor Gray
+    Write-Host "2. Service is internal - accessible via:" -ForegroundColor White
+    Write-Host "   - Kafka topics: service-2-input, service-2-output" -ForegroundColor Gray
+    Write-Host "   - Service Discovery: service-2.develop.internal" -ForegroundColor Gray
     Write-Host ""
 } else {
     Write-Host ""

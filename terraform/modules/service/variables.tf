@@ -402,6 +402,12 @@ variable "enable_pipeline" {
   default     = true
 }
 
+variable "enable_notifications" {
+  type        = bool
+  description = "Whether to enable SNS notifications for pipeline events"
+  default     = true
+}
+
 variable "notification_sns_topic_arn" {
   type        = string
   description = "ARN of the SNS topic for pipeline notifications"
@@ -412,6 +418,12 @@ variable "approval_sns_topic_arn" {
   type        = string
   description = "ARN of the SNS topic for production approval notifications"
   default     = ""
+}
+
+variable "notification_events" {
+  type        = list(string)
+  description = "List of pipeline events to send notifications for (uses module defaults if not specified)"
+  default     = []
 }
 
 # =============================================================================

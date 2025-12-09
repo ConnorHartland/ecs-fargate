@@ -1,4 +1,4 @@
-# Provider configuration for service-1
+# Provider configuration for service-2
 
 terraform {
   required_version = ">= 1.0"

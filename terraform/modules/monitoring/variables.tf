@@ -30,6 +30,11 @@ variable "kms_key_arn" {
   type        = string
 }
 
+variable "aws_account_id" {
+  description = "AWS account ID for SNS topic policy conditions"
+  type        = string
+}
+
 # =============================================================================
 # Log Retention Configuration
 # =============================================================================

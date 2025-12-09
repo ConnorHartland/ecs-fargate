@@ -148,8 +148,12 @@ resource "aws_ecs_service" "main" {
   }
 
   lifecycle {
+    # Ignore changes to task_definition - the CI/CD pipeline manages this
     # Ignore changes to desired_count when auto-scaling is enabled
-    ignore_changes = []
+    ignore_changes = [
+      task_definition,
+      desired_count
+    ]
   }
 }
 

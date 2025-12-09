@@ -43,7 +43,7 @@ module "service_1" {
   health_check_timeout  = 5
 
   # ALB Routing Configuration
-  path_patterns          = ["/*"]  # Route all traffic to this service
+  path_patterns          = ["/*"] # Route all traffic to this service
   listener_rule_priority = 101
   deregistration_delay   = 30
 
@@ -115,18 +115,18 @@ module "service_1" {
   codeconnections_arn = local.codeconnections_arn
   branch_pattern      = local.environment == "prod" ? "main" : local.environment == "test" || local.environment == "qa" ? "release" : "develop"
   pipeline_type       = local.environment == "prod" ? "production" : "release"
-  enable_pipeline     = true  # CI/CD pipeline enabled
-  buildspec_path      = ""  # Use inline default buildspec from CICD module
+  enable_pipeline     = true            # CI/CD pipeline enabled
+  buildspec_path      = "buildspec.yml" # Use inline default buildspec from CICD module
 
   notification_sns_topic_arn = local.notification_sns_topic_arn
   approval_sns_topic_arn     = local.approval_sns_topic_arn
 
   # E2E Testing Configuration
-  enable_e2e_tests       = true
-  e2e_test_repository_id = "connor-cicd/qa-tests"  # Your QA test repository
-  e2e_test_branch        = "main"  # Or match environment: develop/test/qa/main
+  enable_e2e_tests       = false
+  e2e_test_repository_id = "connor-cicd/qa-tests" # Your QA test repository
+  e2e_test_branch        = "main"                 # Or match environment: develop/test/qa/main
   e2e_test_environment_variables = {
-    API_URL = "https://your-alb-url.com"  # Service endpoint to test
+    API_URL = "https://your-alb-url.com" # Service endpoint to test
     # Note: ENVIRONMENT and SERVICE_NAME are automatically set by the module
   }
   e2e_test_timeout_minutes = 30

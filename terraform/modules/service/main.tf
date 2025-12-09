@@ -362,9 +362,18 @@ module "cicd" {
   ecs_service_name = module.ecs_service.service_name
 
   # Notifications
-  enable_notifications       = true
+  enable_notifications       = var.enable_notifications
   notification_sns_topic_arn = var.notification_sns_topic_arn
   approval_sns_topic_arn     = var.approval_sns_topic_arn
+  # Only pass notification_events if explicitly set, otherwise use valid defaults
+  # Note: Some event types like 'stopped' and 'resumed' are not valid for CodePipeline
+  notification_events = length(var.notification_events) > 0 ? var.notification_events : [
+    "codepipeline-pipeline-pipeline-execution-started",
+    "codepipeline-pipeline-pipeline-execution-succeeded",
+    "codepipeline-pipeline-pipeline-execution-failed",
+    "codepipeline-pipeline-pipeline-execution-canceled",
+    "codepipeline-pipeline-pipeline-execution-superseded"
+  ]
 
   # Build configuration
   log_retention_days    = local.effective_log_retention

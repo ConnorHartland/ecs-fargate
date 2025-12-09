@@ -1,6 +1,6 @@
 #!/bin/bash
 # Bootstrap script for creating Terraform backend infrastructure
-# This script creates the S3 bucket and DynamoDB table required for state management
+# This script creates the S3 bucket for state management (no DynamoDB locking)
 #
 # Usage: ./bootstrap-backend.sh <aws-region> <aws-account-id>
 # Example: ./bootstrap-backend.sh us-east-1 123456789012
@@ -12,13 +12,12 @@ PROJECT_NAME="ecs-fargate"
 REGION="${1:-us-east-1}"
 ACCOUNT_ID="${2:-$(aws sts get-caller-identity --query Account --output text)}"
 BUCKET_NAME="${PROJECT_NAME}-terraform-state-${ACCOUNT_ID}"
-TABLE_NAME="${PROJECT_NAME}-terraform-state-lock"
 
 echo "=== Terraform Backend Bootstrap ==="
 echo "Region: ${REGION}"
 echo "Account ID: ${ACCOUNT_ID}"
 echo "S3 Bucket: ${BUCKET_NAME}"
-echo "DynamoDB Table: ${TABLE_NAME}"
+echo "Note: DynamoDB locking disabled to avoid state lock issues"
 echo ""
 
 # Create S3 bucket
@@ -66,25 +65,17 @@ aws s3api put-public-access-block \
         "RestrictPublicBuckets": true
     }'
 
-# Create DynamoDB table for state locking
-echo "Creating DynamoDB table for state locking..."
-aws dynamodb create-table \
-    --table-name "${TABLE_NAME}" \
-    --attribute-definitions AttributeName=LockID,AttributeType=S \
-    --key-schema AttributeName=LockID,KeyType=HASH \
-    --billing-mode PAY_PER_REQUEST \
-    --region "${REGION}" \
-    --tags Key=Project,Value="${PROJECT_NAME}" Key=ManagedBy,Value=Terraform \
-    2>/dev/null || echo "Table already exists or creation failed"
-
 echo ""
 echo "=== Bootstrap Complete ==="
 echo ""
 echo "Update your backend.hcl files with:"
-echo "  bucket         = \"${BUCKET_NAME}\""
-echo "  dynamodb_table = \"${TABLE_NAME}\""
-echo "  region         = \"${REGION}\""
+echo "  bucket  = \"${BUCKET_NAME}\""
+echo "  region  = \"${REGION}\""
+echo "  encrypt = true"
 echo ""
 echo "Initialize Terraform with:"
 echo "  cd terraform"
 echo "  terraform init -backend-config=environments/develop/backend.hcl"
+echo ""
+echo "Note: DynamoDB state locking is disabled. This is fine for solo development"
+echo "but be careful if multiple people are running Terraform simultaneously."
